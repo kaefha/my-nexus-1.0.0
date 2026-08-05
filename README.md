@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MAI NIMS (Nexus Inventory Management System)
 
-## Getting Started
+MAI NIMS is a modern, responsive, and enterprise-grade web application built to handle complex inventory, warehouse operations, procurement, and logistics management. 
 
-First, run the development server:
+## 🚀 Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Dynamic Dashboard**: Real-time overview of inventory alerts, recent RFC (Request for Consumption) activities, and quick access to core modules.
+- **Inventory & Warehouse Management**: Full visibility into stock levels, material tracking, goods receipts, and issuances.
+- **RFC & Project Management**: End-to-end request tracking for project consumptions with dedicated approval flows.
+- **Procurement & Logistics**: Vendor management, procurement monitoring, and real-time shipment map tracking.
+- **Master Data**: Centralized management for materials, warehouses, vendors, and users.
+- **Responsive App-like UI**: A fully rigid, desktop-app-like web interface preventing native browser bounce effects, optimized with flexible and responsive data tables.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🛠️ Technology Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Framework**: [Next.js](https://nextjs.org/) (App Router)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **UI Components**: Custom implementation based on [shadcn/ui](https://ui.shadcn.com/)
+- **Icons**: [Lucide React](https://lucide.dev/)
+- **Language**: TypeScript
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 💻 Getting Started
 
-## Learn More
+### Prerequisites
+Make sure you have [Node.js](https://nodejs.org/) installed on your machine.
 
-To learn more about Next.js, take a look at the following resources:
+### Installation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/kaefha/my-nexus-1.0.0.git
+   cd mai-nims
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+2. Install all dependencies:
+   ```bash
+   npm install
+   ```
 
-## Deploy on Vercel
+3. Run the development server:
+   ```bash
+   npm run dev
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+4. Open your browser and navigate to:
+   [http://localhost:3000](http://localhost:3000)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+*(To access the application from another device on the same local network, you can run `npm run dev -- -H 0.0.0.0` and visit `http://<your-local-ip>:3000`)*
+
+## 🤝 Contribution & Deployment
+
+- To build the application for production, use `npm run build`.
+- To preview the production build locally, use `npm run start`.
