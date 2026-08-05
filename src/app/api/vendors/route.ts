@@ -1,0 +1,129 @@
+import { NextResponse } from 'next/server';
+import { pool, generateId } from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const search = (searchParams.get('search') || '').toLowerCase();
+    
+    let queryStr = 'SELECT * FROM vendors';
+    const queryParams: any[] = [];
+
+    if (search) {
+      queryStr += ` WHERE LOWER(vendor_code) LIKE $1 OR LOWER(name) LIKE $1 OR LOWER(contact_person) LIKE $1`;
+      queryParams.push(`%${search}%`);
+    }
+
+    queryStr += ' ORDER BY name ASC';
+    
+    const res = await pool.query(queryStr, queryParams);
+    
+    const vendors = res.rows.map((row: any) => ({
+      id: row.id,
+      vendorCode: row.vendor_code,
+      name: row.name,
+      contactPerson: row.contact_person,
+      email: row.email,
+      phone: row.phone,
+      address: row.address,
+      isActive: row.is_active,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
+
+    return NextResponse.json({ data: vendors }, { status: 200 });
+  } catch (error: any) {
+    console.error('Error fetching vendors:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { vendorCode, name, contactPerson, email, phone, address } = body;
+
+    if (!vendorCode || !name) {
+      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+    }
+
+    const id = generateId();
+
+    const res = await pool.query(`
+      INSERT INTO vendors (id, vendor_code, name, contact_person, email, phone, address, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
+    `, [id, vendorCode, name, contactPerson || '', email || '', phone || '', address || '', true]);
+
+    const row = res.rows[0];
+    const vendor = {
+      id: row.id,
+      vendorCode: row.vendor_code,
+      name: row.name,
+      contactPerson: row.contact_person,
+      email: row.email,
+      phone: row.phone,
+      address: row.address,
+      isActive: row.is_active,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+
+    return NextResponse.json({ data: vendor, message: 'Vendor created' }, { status: 201 });
+  } catch (error: any) {
+    console.error('Error creating vendor:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, vendorCode, name, contactPerson, email, phone, address, isActive } = body;
+
+    if (!id || !vendorCode || !name) {
+      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+    }
+
+    const res = await pool.query(`
+      UPDATE vendors 
+      SET vendor_code = $1, name = $2, contact_person = $3, email = $4, 
+          phone = $5, address = $6, is_active = $7, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $8
+      RETURNING *
+    `, [vendorCode, name, contactPerson || '', email || '', phone || '', address || '', isActive !== undefined ? isActive : true, id]);
+
+    if (res.rowCount === 0) {
+      return NextResponse.json({ message: 'Vendor not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ data: res.rows[0], message: 'Vendor updated' }, { status: 200 });
+  } catch (error: any) {
+    console.error('Error updating vendor:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ message: 'Missing vendor ID' }, { status: 400 });
+    }
+
+    const res = await pool.query(`DELETE FROM vendors WHERE id = $1 RETURNING id`, [id]);
+
+    if (res.rowCount === 0) {
+      return NextResponse.json({ message: 'Vendor not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ message: 'Vendor deleted successfully' }, { status: 200 });
+  } catch (error: any) {
+    console.error('Error deleting vendor:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}

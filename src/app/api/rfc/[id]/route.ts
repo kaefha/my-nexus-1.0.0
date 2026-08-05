@@ -1,0 +1,119 @@
+import { NextResponse } from 'next/server';
+import { pool } from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request, context: { params: Promise<{ id: string }> | { id: string } }) {
+  try {
+    const params = await context.params;
+    const { id } = params;
+    
+    const rfcQuery = `
+      SELECT 
+        r.id, 
+        r.rfc_number as "rfcNumber", 
+        r.project_id as "projectId", 
+        r.location, 
+        r.requestor_id as "requestorId", 
+        r.notes, 
+        r.status, 
+        r.created_at as "createdAt",
+        p.project_name as "projectName",
+        u1.name as "requestorName",
+        u1.role as "requestorRole",
+        u2.name as "approverName",
+        u2.role as "approverRole",
+        s_app.name as "siteApproverName",
+        f_app.name as "financeApproverName"
+      FROM rfcs r
+      LEFT JOIN projects p ON r.project_id = p.id
+      LEFT JOIN users u1 ON r.requestor_id = u1.id
+      LEFT JOIN users u2 ON r.approver_id = u2.id
+      LEFT JOIN users s_app ON r.site_approver_id = s_app.id
+      LEFT JOIN users f_app ON r.finance_approver_id = f_app.id
+      WHERE r.id = $1
+    `;
+    const rfcRes = await pool.query(rfcQuery, [id]);
+    
+    if (rfcRes.rows.length === 0) {
+      return NextResponse.json({ message: 'RFC not found' }, { status: 404 });
+    }
+    
+    const rfc = rfcRes.rows[0];
+    
+    const itemsRes = await pool.query(`
+      SELECT ri.id, ri.material_id as "materialId", ri.request_qty as "requestQty", ri.notes, m.material_name as "materialName", m.material_code as "materialCode", m.unit
+      FROM rfc_items ri
+      LEFT JOIN material_masters m ON ri.material_id = m.id
+      WHERE ri.rfc_id = $1
+    `, [id]);
+    
+    const formattedRfc = {
+      ...rfc,
+      project: { projectName: rfc.projectName },
+      requestor: { name: rfc.requestorName, role: rfc.requestorRole },
+      approvalDestinationUser: { name: rfc.approverName, role: rfc.approverRole },
+      siteApproverName: rfc.siteApproverName,
+      financeApproverName: rfc.financeApproverName,
+      items: itemsRes.rows
+    };
+    
+    return NextResponse.json({ data: formattedRfc }, { status: 200 });
+  } catch (error: any) {
+    console.error('Error fetching RFC details:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> | { id: string } }) {
+  try {
+    const params = await context.params;
+    const { id } = params;
+    const body = await request.json();
+    
+    // Only allow updating status and signed_document for now
+    if (!body.status) {
+      return NextResponse.json({ message: 'Status is required' }, { status: 400 });
+    }
+
+    const { status, signedDocument, approverId } = body;
+
+    let query = `
+      UPDATE rfcs 
+      SET status = $1, updated_at = CURRENT_TIMESTAMP
+    `;
+    const queryParams = [status, id];
+    let paramIndex = 3;
+
+    if (signedDocument) {
+      query += `, signed_document = $${paramIndex}`;
+      queryParams.push(signedDocument);
+      paramIndex++;
+    }
+
+    if (approverId) {
+      if (status === 'WAITING_FINANCE_APPROVAL') {
+        query += `, site_approver_id = $${paramIndex}`;
+        queryParams.push(approverId);
+        paramIndex++;
+      } else if (status === 'APPROVED' || status === 'REJECTED') {
+        query += `, finance_approver_id = $${paramIndex}`;
+        queryParams.push(approverId);
+        paramIndex++;
+      }
+    }
+
+    query += ` WHERE id = $2 RETURNING *`;
+
+    const res = await pool.query(query, queryParams);
+
+    if (res.rows.length === 0) {
+      return NextResponse.json({ message: 'RFC not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ data: res.rows[0], message: 'RFC updated' }, { status: 200 });
+  } catch (error: any) {
+    console.error('Error updating RFC:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}

@@ -1,0 +1,51 @@
+import { NextResponse } from 'next/server';
+import { pool } from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const warehouseId = searchParams.get('warehouseId');
+    const search = (searchParams.get('search') || '').toLowerCase();
+
+    let queryStr = `
+      SELECT 
+        s.id, 
+        s.quantity, 
+        s.last_updated as "lastUpdated",
+        w.name as "warehouseName",
+        w.code as "warehouseCode",
+        m.material_code as "materialCode",
+        m.material_name as "materialName",
+        m.category
+      FROM inventory_stocks s
+      JOIN warehouses w ON s.warehouse_id = w.id
+      JOIN material_masters m ON s.material_id = m.id
+      WHERE 1=1
+    `;
+    const queryParams: any[] = [];
+    let paramIndex = 1;
+
+    if (warehouseId) {
+      queryStr += ` AND s.warehouse_id = $${paramIndex}`;
+      queryParams.push(warehouseId);
+      paramIndex++;
+    }
+
+    if (search) {
+      queryStr += ` AND (LOWER(m.material_name) LIKE $${paramIndex} OR LOWER(m.material_code) LIKE $${paramIndex} OR LOWER(w.name) LIKE $${paramIndex})`;
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    queryStr += ' ORDER BY w.name ASC, m.material_name ASC';
+
+    const res = await pool.query(queryStr, queryParams);
+
+    return NextResponse.json({ data: res.rows }, { status: 200 });
+  } catch (error: any) {
+    console.error('Error fetching stocks:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}

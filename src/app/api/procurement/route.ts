@@ -1,0 +1,104 @@
+import { NextResponse } from 'next/server';
+import { pool, generateId } from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const search = (searchParams.get('search') || '').toLowerCase();
+    
+    let queryStr = 'SELECT * FROM purchase_orders';
+    const queryParams: any[] = [];
+
+    if (search) {
+      queryStr += ` WHERE LOWER(po_number) LIKE $1 OR LOWER(vendor) LIKE $1`;
+      queryParams.push(`%${search}%`);
+    }
+
+    queryStr += ' ORDER BY created_at DESC';
+    
+    const res = await pool.query(queryStr, queryParams);
+    
+    const pos = res.rows.map((row: any) => ({
+      id: row.id,
+      poNumber: row.po_number,
+      vendor: row.vendor,
+      rfcId: row.rfc_id,
+      expectedDate: row.expected_date,
+      notes: row.notes,
+      status: row.status,
+      itemsCount: row.items_count,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
+
+    return NextResponse.json({ data: pos }, { status: 200 });
+  } catch (error: any) {
+    console.error('Error fetching POs:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { poNumber, vendor, rfcId, expectedDate, notes, items } = body;
+
+    if (!poNumber || !vendor) {
+      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+    }
+
+    const id = generateId();
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      const res = await client.query(`
+        INSERT INTO purchase_orders (id, po_number, vendor, rfc_id, expected_date, notes, status, items_count)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *
+      `, [id, poNumber, vendor, rfcId || null, expectedDate ? new Date(expectedDate) : null, notes || '', 'DRAFT', items?.length || 0]);
+
+      if (items && items.length > 0) {
+        for (const item of items) {
+          const itemId = generateId();
+          await client.query(`
+            INSERT INTO purchase_order_items (id, purchase_order_id, material_id, quantity, notes)
+            VALUES ($1, $2, $3, $4, $5)
+          `, [itemId, id, item.materialId, parseInt(item.quantity, 10), item.notes || '']);
+        }
+      }
+      
+      await client.query('COMMIT');
+      
+      const row = res.rows[0];
+      const po = {
+        id: row.id,
+        poNumber: row.po_number,
+        vendor: row.vendor,
+        rfcId: row.rfc_id,
+        expectedDate: row.expected_date,
+        notes: row.notes,
+        status: row.status,
+        itemsCount: row.items_count,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      };
+
+      return NextResponse.json({ data: po, message: 'PO created' }, { status: 201 });
+    } catch (txError) {
+      await client.query('ROLLBACK');
+      throw txError;
+    } finally {
+      client.release();
+    }
+    } catch (error: any) {
+    if (error.code === '23505') { // Postgres unique constraint violation
+      return NextResponse.json({ message: 'PO Number already exists' }, { status: 400 });
+    }
+    console.error('Error creating PO:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}
