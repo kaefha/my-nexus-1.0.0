@@ -11,29 +11,29 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 export default function MaterialReceivePage() {
-  const [pos, setPos] = useState<any[]>([]);
+  const [dos, setDos] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   
-  const [selectedPoId, setSelectedPoId] = useState<string>('');
-  const [selectedPo, setSelectedPo] = useState<any>(null);
+  const [selectedDoId, setSelectedDoId] = useState<string>('');
+  const [selectedDo, setSelectedDo] = useState<any>(null);
   
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
   const [receivedItems, setReceivedItems] = useState<Record<string, number>>({});
   
-  const [loadingPOs, setLoadingPOs] = useState(true);
-  const [isFetchingPo, setIsFetchingPo] = useState(false);
+  const [loadingDOs, setLoadingDOs] = useState(true);
+  const [isFetchingDo, setIsFetchingDo] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch POs (Ideally only ISSUED or PARTIAL, but we'll fetch all and filter)
-        const poRes = await api.get('/api/procurement');
-        const activePos = (poRes.data?.data || []).filter((po: any) => 
-          po.status !== 'COMPLETED' && po.status !== 'DRAFT'
+        // Fetch DELIVERED DOs ready for receiving
+        const doRes = await api.get('/api/logistics', { params: { type: 'history' } });
+        const readyDos = (doRes.data?.data || []).filter((d: any) => 
+          d.status === 'DELIVERED' || d.status === 'SELESAI'
         );
-        setPos(activePos);
+        setDos(readyDos);
 
         // Fetch Warehouses
         const whRes = await api.get('/api/warehouse');
@@ -41,27 +41,36 @@ export default function MaterialReceivePage() {
       } catch (error) {
         console.error('Failed to load initial data:', error);
       } finally {
-        setLoadingPOs(false);
+        setLoadingDOs(false);
       }
     };
     
     fetchData();
   }, []);
 
-  const handlePoChange = async (poId: string) => {
-    setSelectedPoId(poId);
+  const handleDoChange = async (doId: string) => {
+    setSelectedDoId(doId);
     setSuccess(false);
-    if (!poId) {
-      setSelectedPo(null);
+    if (!doId) {
+      setSelectedDo(null);
       setReceivedItems({});
+      setSelectedWarehouseId('');
       return;
     }
     
-    setIsFetchingPo(true);
+    setIsFetchingDo(true);
     try {
-      const { data } = await api.get(`/api/procurement/${poId}`);
+      const { data } = await api.get(`/api/logistics/${doId}`);
       if (data?.data) {
-        setSelectedPo(data.data);
+        setSelectedDo(data.data);
+        
+        // Auto-fill warehouse from DO destination
+        const dest = data.data.destination;
+        if (dest && warehouses.some(w => w.id === dest)) {
+          setSelectedWarehouseId(dest);
+        } else {
+          setSelectedWarehouseId('');
+        }
         
         // Auto-fill received quantities with the ordered quantities
         const initialQtys: Record<string, number> = {};
@@ -71,9 +80,9 @@ export default function MaterialReceivePage() {
         setReceivedItems(initialQtys);
       }
     } catch (error) {
-      console.error('Failed to fetch PO details:', error);
+      console.error('Failed to fetch DO details:', error);
     } finally {
-      setIsFetchingPo(false);
+      setIsFetchingDo(false);
     }
   };
 
@@ -89,15 +98,15 @@ export default function MaterialReceivePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPoId || !selectedWarehouseId || !selectedPo?.items?.length) return;
+    if (!selectedDoId || !selectedWarehouseId || !selectedDo?.items?.length) return;
     
     setIsSubmitting(true);
     
     try {
       const payload = {
-        poId: selectedPoId,
+        doId: selectedDoId,
         warehouseId: selectedWarehouseId,
-        items: selectedPo.items.map((item: any) => ({
+        items: selectedDo.items.map((item: any) => ({
           materialId: item.materialId,
           receivedQty: receivedItems[item.materialId] || 0
         }))
@@ -106,16 +115,17 @@ export default function MaterialReceivePage() {
       await api.post('/api/warehouse/receive', payload);
       
       setSuccess(true);
-      setSelectedPoId('');
-      setSelectedPo(null);
+      setSelectedDoId('');
+      setSelectedDo(null);
       setReceivedItems({});
+      setSelectedWarehouseId('');
       
-      // Refresh PO list to remove completed POs
-      const poRes = await api.get('/api/procurement');
-      const activePos = (poRes.data?.data || []).filter((po: any) => 
-        po.status !== 'COMPLETED' && po.status !== 'DRAFT'
+      // Refresh DO list to remove completed DOs
+      const doRes = await api.get('/api/logistics', { params: { type: 'history' } });
+      const readyDos = (doRes.data?.data || []).filter((d: any) => 
+        d.status === 'DELIVERED' || d.status === 'SELESAI'
       );
-      setPos(activePos);
+      setDos(readyDos);
       
     } catch (error) {
       console.error('Failed to receive materials:', error);
@@ -130,7 +140,7 @@ export default function MaterialReceivePage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Material Receive (Goods Receipt)</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Receive incoming materials from vendors based on Purchase Orders.
+          Receive incoming materials from delivered shipments into warehouse stock.
         </p>
       </div>
       
@@ -145,106 +155,132 @@ export default function MaterialReceivePage() {
         <Card>
           <CardHeader>
             <CardTitle>Receipt Details</CardTitle>
-            <CardDescription>Select a PO and destination warehouse</CardDescription>
+            <CardDescription>Select a Delivery Order (DO) and confirm destination warehouse</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="poSelect">Purchase Order</Label>
-                <Select value={selectedPoId} onValueChange={handlePoChange} disabled={loadingPOs || isSubmitting}>
-                  <SelectTrigger id="poSelect" className="w-full" style={{ width: '100%' }}>
-                    <SelectValue placeholder={loadingPOs ? "Loading POs..." : "Select PO"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pos.length === 0 ? (
-                      <SelectItem value="empty" disabled>No pending POs found</SelectItem>
-                    ) : (
-                      pos.map(po => (
-                        <SelectItem key={po.id} value={po.id}>{po.poNumber} - {po.vendor}</SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <div className="space-y-2">
+                  <Label htmlFor="do-select">Delivery Order (DO)</Label>
+                  {loadingDOs ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Loading DOs...
+                    </div>
+                  ) : (
+                    <Select value={selectedDoId} onValueChange={handleDoChange}>
+                      <SelectTrigger id="do-select" className="w-full">
+                        <SelectValue placeholder="Select a delivered DO..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dos.length === 0 ? (
+                          <SelectItem value="none" disabled>No pending DOs found</SelectItem>
+                        ) : (
+                          dos.map(d => (
+                            <SelectItem key={d.id} value={d.id}>
+                              {d.doNumber} - {d.project?.projectName}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="warehouse-select">Receiving Warehouse</Label>
+                  <Select 
+                    value={selectedWarehouseId} 
+                    onValueChange={setSelectedWarehouseId}
+                    disabled={!selectedDoId || isFetchingDo || isSubmitting}
+                  >
+                    <SelectTrigger id="warehouse-select" className="w-full">
+                      <SelectValue placeholder="Select warehouse..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {warehouses.map(w => (
+                        <SelectItem key={w.id} value={w.id}>
+                          {w.name} ({w.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedDo?.destination && warehouses.some(w => w.id === selectedDo.destination) && (
+                    <p className="text-xs text-muted-foreground">Automatically selected from DO destination.</p>
+                  )}
+                </div>
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="whSelect">Destination Warehouse</Label>
-                <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId} disabled={isSubmitting}>
-                  <SelectTrigger id="whSelect" className="w-full" style={{ width: '100%' }}>
-                    <SelectValue placeholder="Select warehouse" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {warehouses.map(wh => (
-                      <SelectItem key={wh.id} value={wh.id}>{wh.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {isFetchingDo ? (
+                <div className="py-8 flex justify-center">
+                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                </div>
+              ) : selectedDo ? (
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-medium">Items to Receive</h3>
+                  </div>
+                  
+                  <div className="border rounded-md overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-slate-50">
+                        <TableRow>
+                          <TableHead>Material Code</TableHead>
+                          <TableHead>Material Name</TableHead>
+                          <TableHead className="text-right">Expected Qty</TableHead>
+                          <TableHead className="w-[150px]">Received Qty</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedDo.items?.map((item: any) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-medium text-slate-700">{item.materialCode}</TableCell>
+                            <TableCell>{item.materialName}</TableCell>
+                            <TableCell className="text-right font-medium">
+                              {item.quantity} <span className="text-muted-foreground font-normal text-xs">{item.unit}</span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Input 
+                                  type="number" 
+                                  min="0" 
+                                  max={item.quantity}
+                                  value={receivedItems[item.materialId] ?? ''}
+                                  onChange={(e) => handleQtyChange(item.materialId, e.target.value)}
+                                  className="w-20 text-right"
+                                />
+                                <span className="text-xs text-muted-foreground">{item.unit}</span>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  
+                  <div className="flex justify-end pt-4">
+                    <Button 
+                      type="submit" 
+                      disabled={isSubmitting || !selectedWarehouseId}
+                      className="w-full sm:w-auto"
+                    >
+                      {isSubmitting ? (
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      ) : (
+                        <PackageOpen className="w-4 h-4 mr-2" />
+                      )}
+                      Receive Materials
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-12 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-slate-500">
+                  <ArrowRight className="w-8 h-8 mb-2 text-slate-300" />
+                  <p>Select a Delivery Order above to view items</p>
+                </div>
+              )}
               
-              <Button 
-                type="submit" 
-                className="w-full mt-4" 
-                disabled={!selectedPoId || !selectedWarehouseId || isSubmitting || !selectedPo}
-              >
-                {isSubmitting ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
-                ) : (
-                  <><PackageOpen className="w-4 h-4 mr-2" /> Process Receipt</>
-                )}
-              </Button>
             </form>
-          </CardContent>
-        </Card>
-        
-        <Card className={!selectedPo ? 'opacity-50 pointer-events-none' : ''}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ArrowRight className="w-5 h-5 text-muted-foreground" />
-              Incoming Items
-            </CardTitle>
-            <CardDescription>
-              {selectedPo ? `Review items from ${selectedPo.poNumber}` : 'Select a PO to view items'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isFetchingPo ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : selectedPo ? (
-              <Table className="whitespace-nowrap">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Material Name</TableHead>
-                    <TableHead className="w-[120px] text-center">Ordered Qty</TableHead>
-                    <TableHead className="w-[150px] text-right">Received Qty</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {selectedPo.items?.map((item: any) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.materialName || 'Unknown Material'}</TableCell>
-                      <TableCell className="text-center bg-muted/20">{item.quantity}</TableCell>
-                      <TableCell className="text-right">
-                        <Input 
-                          type="number" 
-                          min="0"
-                          className="w-24 ml-auto text-right"
-                          value={receivedItems[item.materialId] || 0}
-                          onChange={(e) => handleQtyChange(item.materialId, e.target.value)}
-                          disabled={isSubmitting}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg bg-muted/10">
-                <PackageOpen className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                <p>No Purchase Order selected</p>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>

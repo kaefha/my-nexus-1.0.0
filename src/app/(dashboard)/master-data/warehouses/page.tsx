@@ -173,14 +173,14 @@ export default function WarehousePage() {
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
- <TableHead>Code</TableHead>
- <TableHead>Name</TableHead>
- <TableHead>Location</TableHead>
- <TableHead>Coordinates</TableHead>
- <TableHead>Evidence</TableHead>
- <TableHead>Type</TableHead>
- <TableHead>Status</TableHead>
- <TableHead className="text-right">Action</TableHead>
+ <TableHead className="w-[150px]">Code</TableHead>
+ <TableHead className="w-[250px]">Name</TableHead>
+ <TableHead className="w-[200px]">Location</TableHead>
+ <TableHead className="w-[150px]">Coordinates</TableHead>
+ <TableHead className="w-[150px]">Evidence</TableHead>
+ <TableHead className="w-[150px]">Type</TableHead>
+ <TableHead className="w-[120px]">Status</TableHead>
+ <TableHead className="w-[80px] text-right">Action</TableHead>
  </TableRow>
  </TableHeader>
  <TableBody>
@@ -188,13 +188,13 @@ export default function WarehousePage() {
  <TableRow key={w.id} className="hover:bg-muted/30">
  <TableCell className="font-medium text-primary">{w.code}</TableCell>
  <TableCell className="font-medium">{w.name}</TableCell>
- <TableCell>{w.location}</TableCell>
+ <TableCell className="whitespace-normal max-w-[300px]">{w.location}</TableCell>
  <TableCell>
     {w.coordinates ? (
       <DropdownMenu>
         <DropdownMenuTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/30 px-2 py-1 rounded-md w-fit hover:bg-muted/50 transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-primary/20">
           <MapPin className="w-3 h-3 text-primary" />
-          {w.coordinates}
+          {w.coordinates.split(',').map((c: string) => parseFloat(c.trim()).toFixed(5)).join(', ')}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           <DropdownMenuItem onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(w.coordinates)}`, '_blank')} className="flex items-center gap-2 cursor-pointer">

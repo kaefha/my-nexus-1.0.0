@@ -19,6 +19,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         po.notes, 
         po.status, 
         po.items_count as "itemsCount", 
+        po.transporter,
+        po.driver_name as "driverName",
+        po.vehicle_number as "vehicleNumber",
+        po.deliver_to as "deliverTo",
+        po.signed_document_url as "signedDocumentUrl",
         po.created_at as "createdAt",
         u.name as "approverName",
         u.role as "approverRole"
@@ -53,6 +58,105 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     }, { status: 200 });
   } catch (error: any) {
     console.error('Error fetching PO details:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request, context: { params: Promise<{ id: string }> | { id: string } }) {
+  try {
+    const params = await context.params;
+    const { id } = params;
+    const body = await request.json();
+    const { poNumber, vendor, rfcId, expectedDate, notes, items, transporter, driverName, vehicleNumber, deliverTo } = body;
+
+    // Start transaction
+    await pool.query('BEGIN');
+
+    // Update PO
+    await pool.query(`
+      UPDATE purchase_orders 
+      SET 
+        po_number = $1, 
+        vendor = $2, 
+        rfc_id = $3, 
+        expected_date = $4, 
+        notes = $5,
+        transporter = $6,
+        driver_name = $7,
+        vehicle_number = $8,
+        deliver_to = $9,
+        updated_at = NOW()
+      WHERE id = $10
+    `, [
+      poNumber, 
+      vendor, 
+      rfcId || null, 
+      expectedDate || null, 
+      notes || null, 
+      transporter || null,
+      driverName || null,
+      vehicleNumber || null,
+      deliverTo || null,
+      id
+    ]);
+
+    // If items are provided, delete existing and insert new
+    if (items && Array.isArray(items)) {
+      await pool.query('DELETE FROM purchase_order_items WHERE purchase_order_id = $1', [id]);
+      
+      for (const item of items) {
+        await pool.query(`
+          INSERT INTO purchase_order_items (
+            purchase_order_id, 
+            material_id, 
+            quantity, 
+            notes
+          ) VALUES ($1, $2, $3, $4)
+        `, [
+          id, 
+          item.materialId, 
+          item.quantity, 
+          item.notes || null
+        ]);
+      }
+      
+      // Update items count
+      await pool.query('UPDATE purchase_orders SET items_count = $1 WHERE id = $2', [items.length, id]);
+    }
+
+    await pool.query('COMMIT');
+    return NextResponse.json({ message: 'Purchase Order updated successfully' }, { status: 200 });
+  } catch (error: any) {
+    await pool.query('ROLLBACK');
+    console.error('Error updating PO:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> | { id: string } }) {
+  try {
+    const params = await context.params;
+    const { id } = params;
+
+    // Start transaction
+    await pool.query('BEGIN');
+
+    // Delete PO items first (foreign key constraint)
+    await pool.query('DELETE FROM purchase_order_items WHERE purchase_order_id = $1', [id]);
+    
+    // Delete PO
+    const res = await pool.query('DELETE FROM purchase_orders WHERE id = $1 RETURNING id', [id]);
+    
+    if (res.rowCount === 0) {
+      await pool.query('ROLLBACK');
+      return NextResponse.json({ message: 'Purchase Order not found' }, { status: 404 });
+    }
+
+    await pool.query('COMMIT');
+    return NextResponse.json({ message: 'Purchase Order deleted successfully' }, { status: 200 });
+  } catch (error: any) {
+    await pool.query('ROLLBACK');
+    console.error('Error deleting PO:', error);
     return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }

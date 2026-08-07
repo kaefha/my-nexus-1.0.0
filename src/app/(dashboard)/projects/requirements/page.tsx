@@ -194,13 +194,13 @@ export default function RequirementsPage() {
  <Table className="bg-card border rounded-xl overflow-hidden">
  <TableHeader>
  <TableRow className="bg-muted/50">
- <TableHead>Material Code</TableHead>
- <TableHead>Material Name</TableHead>
- <TableHead>Category</TableHead>
- <TableHead className="text-right">Estimated Qty</TableHead>
- <TableHead>Unit</TableHead>
- <TableHead>Notes</TableHead>
- <TableHead className="text-right">Action</TableHead>
+ <TableHead className="w-[250px]">Material Code</TableHead>
+ <TableHead className="w-[250px]">Material Name</TableHead>
+ <TableHead className="w-[150px]">Category</TableHead>
+ <TableHead className="w-[100px] text-right">Estimated Qty</TableHead>
+ <TableHead className="w-[150px]">Unit</TableHead>
+ <TableHead className="w-[250px]">Notes</TableHead>
+ <TableHead className="w-[80px] text-right">Action</TableHead>
  </TableRow>
  </TableHeader>
  <TableBody>

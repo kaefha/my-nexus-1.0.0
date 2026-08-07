@@ -132,11 +132,11 @@ export default function UsersPage() {
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
- <TableHead>Name</TableHead>
- <TableHead>Email</TableHead>
- <TableHead>Role</TableHead>
- <TableHead>Status</TableHead>
- <TableHead className="text-right">Action</TableHead>
+ <TableHead className="w-[250px]">Name</TableHead>
+ <TableHead className="w-[200px]">Email</TableHead>
+ <TableHead className="w-[150px]">Role</TableHead>
+ <TableHead className="w-[120px]">Status</TableHead>
+ <TableHead className="w-[80px] text-right">Action</TableHead>
  </TableRow>
  </TableHeader>
  <TableBody>

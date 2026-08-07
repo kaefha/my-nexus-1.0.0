@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FileText, Plus, Search, MapPin, Calendar, Clock, Loader2, Printer, Filter } from 'lucide-react';
+import { FileText, Plus, Search, MapPin, Calendar, Clock, Loader2, Printer, Filter, MoreHorizontal, Pencil, Trash2, Eye } from 'lucide-react';
 import api from '@/lib/api';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -12,6 +12,10 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import Link from 'next/link';
 
 export default function RfcPage() {
@@ -22,6 +26,11 @@ export default function RfcPage() {
  const [startDate, setStartDate] = useState('');
  const [endDate, setEndDate] = useState('');
  const [sort, setSort] = useState('desc');
+
+ const [editModalOpen, setEditModalOpen] = useState(false);
+ const [selectedRfc, setSelectedRfc] = useState<any>(null);
+ const [editFormData, setEditFormData] = useState({ location: '', notes: '' });
+ const [isSubmitting, setIsSubmitting] = useState(false);
 
  useEffect(() => {
    fetchRfcs();
@@ -37,6 +46,47 @@ export default function RfcPage() {
  } finally {
  setLoading(false);
  }
+ };
+
+ const openEditModal = (rfc: any) => {
+   setSelectedRfc(rfc);
+   setEditFormData({
+     location: rfc.location || '',
+     notes: rfc.notes || ''
+   });
+   setEditModalOpen(true);
+ };
+
+ const handleEditSubmit = async (e: React.FormEvent) => {
+   e.preventDefault();
+   if (!selectedRfc) return;
+
+   setIsSubmitting(true);
+   try {
+     await api.patch(`/api/rfc/${selectedRfc.id}`, {
+       isEdit: true,
+       location: editFormData.location,
+       notes: editFormData.notes
+     });
+     toast.success('RFC updated and reset to DRAFT');
+     setEditModalOpen(false);
+     fetchRfcs();
+   } catch (error: any) {
+     toast.error(error.response?.data?.message || 'Failed to update RFC');
+   } finally {
+     setIsSubmitting(false);
+   }
+ };
+
+ const handleDelete = async (id: string) => {
+   if (!confirm('Are you sure you want to delete this RFC? This cannot be undone.')) return;
+   try {
+     await api.delete(`/api/rfc/${id}`);
+     toast.success('RFC deleted successfully');
+     fetchRfcs();
+   } catch (error: any) {
+     toast.error(error.response?.data?.message || 'Failed to delete RFC');
+   }
  };
 
  return (
@@ -127,17 +177,17 @@ export default function RfcPage() {
  <TableHeader>
  <TableRow>
  <TableHead className="w-[140px]">RFC Number</TableHead>
- <TableHead>Project</TableHead>
- <TableHead>Location</TableHead>
- <TableHead>Requestor</TableHead>
- <TableHead>Items</TableHead>
- <TableHead>Status</TableHead>
- <TableHead className="text-right">Date</TableHead>
+ <TableHead className="w-[250px]">Project</TableHead>
+ <TableHead className="w-[200px]">Location</TableHead>
+ <TableHead className="w-[150px]">Requestor</TableHead>
+ <TableHead className="w-[100px]">Items</TableHead>
+ <TableHead className="w-[120px]">Status</TableHead>
+ <TableHead className="w-[80px] text-right">Action</TableHead>
  </TableRow>
  </TableHeader>
  <TableBody>
  {rfcs.map((rfc) => (
- <TableRow key={rfc.id} className="hover:bg-muted/30 cursor-pointer">
+ <TableRow key={rfc.id} className="hover:bg-muted/30">
  <TableCell className="font-medium text-primary">
  {rfc.rfcNumber}
  </TableCell>
@@ -145,10 +195,10 @@ export default function RfcPage() {
  <div className="font-medium">{rfc.project?.projectName}</div>
  <div className="text-[10px] text-muted-foreground">{rfc.project?.customer}</div>
  </TableCell>
- <TableCell>
- <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
- <MapPin className="w-3 h-3" />
- {rfc.location}
+ <TableCell className="whitespace-normal max-w-[300px]">
+ <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+ <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
+ <span>{rfc.location}</span>
  </div>
  </TableCell>
  <TableCell>
@@ -168,27 +218,28 @@ export default function RfcPage() {
  <StatusBadge status={rfc.status} />
  </TableCell>
   <TableCell className="text-right">
-  <div className="flex items-center justify-end gap-3 text-xs">
-    {rfc.signedDocument ? (
-      <a 
-        href={rfc.signedDocument} 
-        target="_blank" 
-        rel="noreferrer"
-        className="text-blue-600 hover:underline flex items-center gap-1"
-        title="View Approved Document"
-      >
-        <FileText className="w-3.5 h-3.5" /> Signed Doc
-      </a>
-    ) : (
-      <Link href={`/print/rfc/${rfc.id}`} target="_blank" className="text-gray-600 hover:text-black hover:underline flex items-center gap-1 border border-gray-300 rounded px-2 py-0.5" title="Print Request PDF">
-        <Printer className="w-3 h-3" /> Print PDF
-      </Link>
-    )}
-    <div className="text-muted-foreground flex items-center gap-1.5">
-      <Calendar className="w-3 h-3" />
-      {formatDate(rfc.createdAt)}
-    </div>
-  </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+        <MoreHorizontal className="h-4 w-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {rfc.signedDocument ? (
+          <DropdownMenuItem className="cursor-pointer" onClick={() => window.open(rfc.signedDocument, '_blank')}>
+            <FileText className="w-4 h-4 mr-2" /> Signed Doc
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem className="cursor-pointer" onClick={() => window.open(`/print/rfc/${rfc.id}`, '_blank')}>
+            <Printer className="w-4 h-4 mr-2" /> Print PDF
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem className="cursor-pointer" onClick={() => openEditModal(rfc)}>
+          <Pencil className="w-4 h-4 mr-2 text-muted-foreground" /> Edit RFC
+        </DropdownMenuItem>
+        <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onClick={() => handleDelete(rfc.id)}>
+          <Trash2 className="w-4 h-4 mr-2" /> Delete RFC
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   </TableCell>
   </TableRow>
  ))}
@@ -206,6 +257,48 @@ export default function RfcPage() {
  </div>
  )}
  </div>
+
+ <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+  <DialogContent>
+    <form onSubmit={handleEditSubmit}>
+      <DialogHeader>
+        <DialogTitle>Edit RFC {selectedRfc?.rfcNumber}</DialogTitle>
+        <DialogDescription>
+          Modifying this RFC will reset its status back to Draft and it will require re-approval.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="grid gap-4 py-4">
+        <div className="grid gap-2">
+          <Label htmlFor="location">Location *</Label>
+          <Input 
+            id="location" 
+            value={editFormData.location}
+            onChange={(e) => setEditFormData({...editFormData, location: e.target.value})}
+            required 
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="notes">Notes</Label>
+          <Input 
+            id="notes" 
+            value={editFormData.notes}
+            onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
+          />
+        </div>
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={() => setEditModalOpen(false)} disabled={isSubmitting}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+          Save & Reset to Draft
+        </Button>
+      </DialogFooter>
+    </form>
+  </DialogContent>
+ </Dialog>
+
  </div>
  );
 }

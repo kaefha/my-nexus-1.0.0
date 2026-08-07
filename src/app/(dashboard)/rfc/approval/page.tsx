@@ -35,7 +35,7 @@ export default function RfcApprovalPage() {
     if (r.status === 'WAITING_SITE_APPROVAL' && user?.role === 'SITE_MANAGER') return true;
     if (r.status === 'WAITING_FINANCE_APPROVAL' && user?.role === 'FINANCE') return true;
     // Admins can see all pending approvals
-    if (user?.role === 'ADMIN' && (r.status === 'WAITING_SITE_APPROVAL' || r.status === 'WAITING_FINANCE_APPROVAL')) return true;
+    if ((user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (r.status === 'WAITING_SITE_APPROVAL' || r.status === 'WAITING_FINANCE_APPROVAL')) return true;
     return false;
   });
  setRfcs(pending);
@@ -127,9 +127,9 @@ export default function RfcApprovalPage() {
       </div>
 
       <div className="animate-fade-in" style={{ animationDelay: '200ms' }}>
-        <div className="bg-card border rounded-xl overflow-hidden">
+        <div className="w-full">
  {loading ? (
- <div className="p-8 text-center flex flex-col items-center">
+ <div className="p-8 text-center flex flex-col items-center bg-card border rounded-xl">
  <Loader2 className="w-8 h-8 text-primary animate-spin mb-4" />
  <p className="text-muted-foreground">Loading approval queue...</p>
  </div>
@@ -138,11 +138,11 @@ export default function RfcApprovalPage() {
  <TableHeader className="bg-muted/50">
  <TableRow>
  <TableHead className="w-[120px]">RFC Number</TableHead>
- <TableHead>Project / Location</TableHead>
- <TableHead>Requestor</TableHead>
- <TableHead>Date</TableHead>
- <TableHead>Status</TableHead>
- <TableHead className="text-right">Actions</TableHead>
+ <TableHead className="w-[250px]">Project / Location</TableHead>
+ <TableHead className="w-[150px]">Requestor</TableHead>
+ <TableHead className="w-[150px]">Date</TableHead>
+ <TableHead className="w-[120px]">Status</TableHead>
+ <TableHead className="w-[80px] text-right">Actions</TableHead>
  </TableRow>
  </TableHeader>
  <TableBody>
@@ -151,11 +151,11 @@ export default function RfcApprovalPage() {
  <TableCell className="font-medium text-primary">
  {rfc.rfcNumber}
  </TableCell>
- <TableCell>
+ <TableCell className="whitespace-normal max-w-[300px]">
  <div className="font-medium">{rfc.project?.projectName}</div>
- <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5">
- <MapPin className="w-3 h-3" />
- {rfc.location}
+ <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+ <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
+ <span>{rfc.location}</span>
  </div>
  </TableCell>
  <TableCell>
@@ -209,7 +209,7 @@ export default function RfcApprovalPage() {
  </TableBody>
  </Table>
  ) : (
- <div className="text-center py-16">
+ <div className="text-center py-16 bg-card border rounded-xl">
  <CheckCircle className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-30" />
  <p className="text-muted-foreground font-medium">All caught up!</p>
  <p className="text-sm text-muted-foreground mt-1">There are no RFCs waiting for your approval right now.</p>

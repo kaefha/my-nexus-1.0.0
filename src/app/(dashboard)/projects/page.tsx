@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FolderKanban, Plus, Search, MapPin, Calendar, Users, Loader2, Pencil, Trash2, History, GitCommit, FileText, CheckCircle2, PlayCircle, PauseCircle } from 'lucide-react';
+import { FolderKanban, Plus, Search, MapPin, Calendar, Users, Loader2, Pencil, Trash2, History, GitCommit, FileText, CheckCircle2, PlayCircle, PauseCircle, Phone, MoreHorizontal, Eye } from 'lucide-react';
 import api from '@/lib/api';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -15,6 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
  Dialog,
  DialogContent,
@@ -49,12 +57,17 @@ export default function ProjectsPage() {
  region: '',
  startDate: '',
  pic: '',
+ whatsappNumber: '',
+ projectType: '',
  status: 'PLANNING'
  });
 
  // Delete State
  const [deleteId, setDeleteId] = useState<string | null>(null);
  const [isDeleting, setIsDeleting] = useState(false);
+
+ // View State
+ const [viewProject, setViewProject] = useState<any | null>(null);
 
  // Activity Log State
  const [isLogOpen, setIsLogOpen] = useState(false);
@@ -117,7 +130,7 @@ export default function ProjectsPage() {
 
  const openCreateDialog = () => {
  setEditId(null);
- setFormData({ projectName: '', customer: '', region: '', startDate: '', pic: '', status: 'PLANNING' });
+ setFormData({ projectName: '', customer: '', region: '', startDate: '', pic: '', whatsappNumber: '', projectType: '', status: 'PLANNING' });
  setIsOpen(true);
  };
 
@@ -129,6 +142,8 @@ export default function ProjectsPage() {
  region: project.region,
  startDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '',
  pic: project.pic,
+ whatsappNumber: project.whatsappNumber || '',
+ projectType: project.projectType || '',
  status: project.status || 'PLANNING'
  });
  setIsOpen(true);
@@ -231,12 +246,46 @@ export default function ProjectsPage() {
  onChange={(e) => setFormData({ ...formData, pic: e.target.value })}
  />
  </div>
+ <div className="space-y-2">
+ <Label htmlFor="whatsappNumber">WhatsApp Number</Label>
+ <Input
+ id="whatsappNumber"
+ placeholder="e.g. 628123456789"
+ value={formData.whatsappNumber}
+ onChange={(e) => setFormData({ ...formData, whatsappNumber: e.target.value })}
+ />
+ </div>
+ <div className="space-y-2">
+ <Label htmlFor="projectType">Project Type</Label>
+ <Select value={formData.projectType} onValueChange={(val) => setFormData({ ...formData, projectType: val })}>
+   <SelectTrigger id="projectType" className="w-full">
+     <SelectValue placeholder="Select type" />
+   </SelectTrigger>
+   <SelectContent>
+     <SelectItem value="FTTx">FTTx</SelectItem>
+     <SelectItem value="OSP">OSP</SelectItem>
+     <SelectItem value="ISP">ISP</SelectItem>
+     <SelectItem value="Tower">Tower</SelectItem>
+     <SelectItem value="Maintenance">Maintenance</SelectItem>
+     <SelectItem value="Others">Others</SelectItem>
+   </SelectContent>
+ </Select>
+ </div>
  {editId && (
  <div className="space-y-2">
  <Label htmlFor="status">Status</Label>
  <Select value={formData.status} onValueChange={(val) => setFormData({ ...formData, status: val })}>
-   <SelectTrigger id="status" className="w-full" style={{ width: '100%' }}>
-     <SelectValue placeholder="Select status" />
+   <SelectTrigger id="status" className="w-full">
+     {formData.status ? (
+       <span>
+         {formData.status === 'PLANNING' && 'Planning'}
+         {formData.status === 'IN_PROGRESS' && 'In Progress'}
+         {formData.status === 'COMPLETED' && 'Completed'}
+         {formData.status === 'ON_HOLD' && 'On Hold'}
+       </span>
+     ) : (
+       <span className="text-muted-foreground">Select status</span>
+     )}
    </SelectTrigger>
    <SelectContent>
      <SelectItem value="PLANNING">Planning</SelectItem>
@@ -305,22 +354,29 @@ export default function ProjectsPage() {
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
- <TableHead>Project Name</TableHead>
- <TableHead>Customer</TableHead>
- <TableHead>Region</TableHead>
- <TableHead>Start Date</TableHead>
- <TableHead>PIC</TableHead>
- <TableHead>Status</TableHead>
- <TableHead className="text-right">Action</TableHead>
+ <TableHead className="w-[250px]">Project Name</TableHead>
+ <TableHead className="w-[200px]">Customer</TableHead>
+ <TableHead className="w-[200px]">Region</TableHead>
+ <TableHead className="w-[150px]">Start Date</TableHead>
+ <TableHead className="w-[200px]">PIC</TableHead>
+ <TableHead className="w-[120px]">Status</TableHead>
+ <TableHead className="w-[80px] text-right">Action</TableHead>
  </TableRow>
  </TableHeader>
  <TableBody>
  {projects.map((project) => (
  <TableRow key={project.id} className="hover:bg-muted/30 group">
  <TableCell className="font-medium text-primary">
- <div className="flex items-center gap-2">
- <FolderKanban className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
- {project.projectName}
+ <div className="flex flex-col">
+   <div className="flex items-center gap-2">
+   <FolderKanban className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+   {project.projectName}
+   </div>
+   {project.projectType && (
+     <Badge variant="outline" className="w-fit mt-1 text-[10px] h-4 px-1.5 font-normal">
+       {project.projectType}
+     </Badge>
+   )}
  </div>
  </TableCell>
  <TableCell>{project.customer}</TableCell>
@@ -337,26 +393,50 @@ export default function ProjectsPage() {
  </div>
  </TableCell>
  <TableCell>
- <div className="flex items-center gap-1 text-sm text-muted-foreground">
- <Users className="w-3 h-3" />
- {project.pic}
+ <div className="flex flex-col gap-1">
+   <div className="flex items-center gap-1 text-sm text-muted-foreground">
+     <Users className="w-3 h-3" />
+     {project.pic}
+   </div>
+   {project.whatsappNumber && (
+     <div className="flex items-center gap-1 text-xs text-muted-foreground">
+       <Phone className="w-3 h-3 text-green-600" />
+       <a href={`https://wa.me/${project.whatsappNumber.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="hover:text-green-600 transition-colors">
+         {project.whatsappNumber}
+       </a>
+     </div>
+   )}
  </div>
  </TableCell>
  <TableCell>
  <StatusBadge status={project.status} />
  </TableCell>
  <TableCell className="text-right">
- <div className="flex justify-end gap-2">
- <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => openActivityLog(project)} title="Activity Log">
- <History className="h-4 w-4" />
- </Button>
- <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => openEditDialog(project)}>
- <Pencil className="h-4 w-4" />
- </Button>
- <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => setDeleteId(project.id)}>
- <Trash2 className="h-4 w-4" />
- </Button>
- </div>
+   <DropdownMenu>
+     <DropdownMenuTrigger className="h-8 w-8 p-0 inline-flex items-center justify-center rounded-md hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+       <span className="sr-only">Open menu</span>
+       <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+     </DropdownMenuTrigger>
+     <DropdownMenuContent align="end" className="w-48 shadow-lg">
+       <DropdownMenuItem onClick={() => setViewProject(project)} className="cursor-pointer">
+         <Eye className="mr-2 h-4 w-4 text-muted-foreground" />
+         Lihat Detil
+       </DropdownMenuItem>
+       <DropdownMenuItem onClick={() => openActivityLog(project)} className="cursor-pointer">
+         <History className="mr-2 h-4 w-4 text-muted-foreground" />
+         Activity Log
+       </DropdownMenuItem>
+       <DropdownMenuItem onClick={() => openEditDialog(project)} className="cursor-pointer">
+         <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+         Edit Project
+       </DropdownMenuItem>
+       <DropdownMenuSeparator />
+       <DropdownMenuItem onClick={() => setDeleteId(project.id)} className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive">
+         <Trash2 className="mr-2 h-4 w-4" />
+         Delete
+       </DropdownMenuItem>
+     </DropdownMenuContent>
+   </DropdownMenu>
  </TableCell>
  </TableRow>
  ))}
@@ -400,10 +480,74 @@ export default function ProjectsPage() {
            </div>
          ))
        )}
-     </div>
-   </SheetContent>
- </Sheet>
+      </div>
+    </SheetContent>
+  </Sheet>
 
- </div>
- );
+  <Dialog open={!!viewProject} onOpenChange={(open) => !open && setViewProject(null)}>
+    <DialogContent className="sm:max-w-[500px]">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <FolderKanban className="w-5 h-5 text-primary" />
+          {viewProject?.projectName}
+        </DialogTitle>
+        <DialogDescription>
+          Detailed project information
+        </DialogDescription>
+      </DialogHeader>
+      
+      {viewProject && (
+        <div className="grid grid-cols-2 gap-4 py-4">
+          <div className="space-y-1">
+            <span className="text-xs text-muted-foreground">Customer</span>
+            <p className="font-medium text-sm">{viewProject.customer}</p>
+          </div>
+          <div className="space-y-1">
+            <span className="text-xs text-muted-foreground">Region</span>
+            <p className="font-medium text-sm flex items-center gap-1">
+              <MapPin className="w-3 h-3" /> {viewProject.region}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <span className="text-xs text-muted-foreground">Type</span>
+            <p className="font-medium text-sm">{viewProject.projectType || '-'}</p>
+          </div>
+          <div className="space-y-1">
+            <span className="text-xs text-muted-foreground">Status</span>
+            <div><StatusBadge status={viewProject.status} /></div>
+          </div>
+          <div className="space-y-1">
+            <span className="text-xs text-muted-foreground">Start Date</span>
+            <p className="font-medium text-sm flex items-center gap-1">
+              <Calendar className="w-3 h-3" /> {viewProject.startDate ? formatDate(viewProject.startDate) : '-'}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <span className="text-xs text-muted-foreground">PIC</span>
+            <p className="font-medium text-sm flex items-center gap-1">
+              <Users className="w-3 h-3" /> {viewProject.pic}
+            </p>
+          </div>
+          {viewProject.whatsappNumber && (
+            <div className="space-y-1 col-span-2">
+              <span className="text-xs text-muted-foreground">WhatsApp</span>
+              <p className="font-medium text-sm flex items-center gap-1">
+                <Phone className="w-3 h-3 text-green-600" />
+                <a href={`https://wa.me/${viewProject.whatsappNumber.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="hover:text-green-600 transition-colors">
+                  {viewProject.whatsappNumber}
+                </a>
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+      
+      <DialogFooter>
+        <Button onClick={() => setViewProject(null)}>Close</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  </div>
+  );
 }

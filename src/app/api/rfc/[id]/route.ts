@@ -71,9 +71,20 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const { id } = params;
     const body = await request.json();
     
-    // Only allow updating status and signed_document for now
-    if (!body.status) {
-      return NextResponse.json({ message: 'Status is required' }, { status: 400 });
+    // Support both approval updates and basic edits
+    if (!body.status && !body.isEdit) {
+      return NextResponse.json({ message: 'Status or isEdit flag is required' }, { status: 400 });
+    }
+
+    if (body.isEdit) {
+      // Handle Edit: Update fields and reset to DRAFT
+      const { location, notes } = body;
+      const res = await pool.query(
+        `UPDATE rfcs SET location = $1, notes = $2, status = 'DRAFT', updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *`,
+        [location, notes, id]
+      );
+      if (res.rows.length === 0) return NextResponse.json({ message: 'RFC not found' }, { status: 404 });
+      return NextResponse.json({ data: res.rows[0], message: 'RFC updated and reset to DRAFT' }, { status: 200 });
     }
 
     const { status, signedDocument, approverId } = body;
@@ -114,6 +125,29 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ data: res.rows[0], message: 'RFC updated' }, { status: 200 });
   } catch (error: any) {
     console.error('Error updating RFC:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> | { id: string } }) {
+  try {
+    const params = await context.params;
+    const { id } = params;
+    
+    // First delete items, then the RFC itself due to foreign key constraints
+    await pool.query('BEGIN');
+    await pool.query('DELETE FROM rfc_items WHERE rfc_id = $1', [id]);
+    const res = await pool.query('DELETE FROM rfcs WHERE id = $1 RETURNING id', [id]);
+    await pool.query('COMMIT');
+    
+    if (res.rows.length === 0) {
+      return NextResponse.json({ message: 'RFC not found' }, { status: 404 });
+    }
+    
+    return NextResponse.json({ message: 'RFC deleted successfully' }, { status: 200 });
+  } catch (error: any) {
+    console.error('Error deleting RFC:', error);
+    try { await pool.query('ROLLBACK'); } catch (e) {}
     return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }

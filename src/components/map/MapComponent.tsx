@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import 'leaflet/dist/leaflet.css';
 import { useState, useEffect } from 'react';
 import L from 'leaflet';
-import { Truck, MapPin, User, QrCode } from 'lucide-react';
+import { Truck, MapPin, User, QrCode, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 
 let truckIcon: any = null;
@@ -46,25 +46,27 @@ export default function MapComponent({ selectedDO }: { selectedDO: any }) {
   const origin: [number, number] = [-6.200000, 106.816666];
   const dest: [number, number] = [-6.250000, 106.850000];
   
-  const [currentPos, setCurrentPos] = useState<[number, number]>(origin);
+  const [currentPos, setCurrentPos] = useState<[number, number] | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchLocation = async (manual = false) => {
+    if (manual) setIsRefreshing(true);
+    try {
+      const res = await axios.get(`/api/logistics/${selectedDO.id}/tracking`);
+      if (res.data && res.data.latitude && res.data.longitude) {
+        setCurrentPos([parseFloat(res.data.latitude), parseFloat(res.data.longitude)]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch GPS tracking data", err);
+    } finally {
+      if (manual) setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
 
   useEffect(() => {
     if (!selectedDO?.id) return;
-
-    const fetchLocation = async () => {
-      try {
-        const res = await axios.get(`/api/logistics/${selectedDO.id}/tracking`);
-        if (res.data && res.data.latitude && res.data.longitude) {
-          setCurrentPos([res.data.latitude, res.data.longitude]);
-        }
-      } catch (err) {
-        console.error("Failed to fetch GPS tracking data", err);
-      }
-    };
-
-    fetchLocation(); // fetch immediately
-    const interval = setInterval(fetchLocation, 3000); // Poll every 3 seconds
-    
+    fetchLocation();
+    const interval = setInterval(() => fetchLocation(false), 3000);
     return () => clearInterval(interval);
   }, [selectedDO?.id]);
 
@@ -73,34 +75,36 @@ export default function MapComponent({ selectedDO }: { selectedDO: any }) {
   return (
     <div className="relative w-full h-[600px] overflow-hidden rounded-xl font-sans bg-slate-100">
       <MapContainer 
-        center={currentPos} 
+        center={currentPos || origin} 
         zoom={13} 
         style={{ height: '100%', width: '100%', zIndex: 0 }}
         zoomControl={false}
       >
-        <MapUpdater center={currentPos} />
+        {currentPos && <MapUpdater center={currentPos} />}
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
         />
         {/* Draw the route line */}
-        <Polyline positions={routePath} color="#1e293b" weight={4} opacity={0.8} dashArray="10, 10" />
+        {currentPos && <Polyline positions={routePath} color="#1e293b" weight={4} opacity={0.8} dashArray="10, 10" />}
         
         {/* Destination Marker */}
         <Marker position={dest} icon={destIcon}>
           <Popup>
             <div className="font-semibold text-slate-900">Destination</div>
-            <div className="text-slate-600">{selectedDO?.project?.projectName || selectedDO?.destination}</div>
+            <div className="text-slate-600">{selectedDO?.destination || 'Warehouse'}</div>
           </Popup>
         </Marker>
         
         {/* Current Truck Marker */}
-        <Marker position={currentPos} icon={truckIcon}>
-          <Popup>
-            <div className="font-semibold">DO: {selectedDO?.doNumber}</div>
-            <div className="text-xs text-slate-500">Live Location</div>
-          </Popup>
-        </Marker>
+        {currentPos && (
+          <Marker position={currentPos} icon={truckIcon}>
+            <Popup>
+              <div className="font-semibold">DO: {selectedDO?.doNumber}</div>
+              <div className="text-xs text-slate-500">Live Location</div>
+            </Popup>
+          </Marker>
+        )}
       </MapContainer>
 
       {/* Floating Card Overlay (Uber Eats Style) */}
@@ -113,6 +117,13 @@ export default function MapComponent({ selectedDO }: { selectedDO: any }) {
             <p className="text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-1">Delivery ID</p>
             <h2 className="text-[18px] font-bold text-slate-900">{selectedDO?.doNumber || 'DO-XXXX'}</h2>
           </div>
+
+          {selectedDO?.project?.projectName && (
+            <div>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Project</p>
+              <p className="text-[14px] font-medium text-slate-700">{selectedDO.project.projectName}</p>
+            </div>
+          )}
 
           <div className="flex flex-col gap-3 relative">
             {/* Connecting line */}
@@ -134,17 +145,26 @@ export default function MapComponent({ selectedDO }: { selectedDO: any }) {
               </div>
               <div>
                 <p className="text-[11px] font-bold text-slate-500 uppercase">Destination</p>
-                <p className="text-[14px] font-semibold text-slate-900">{selectedDO?.project?.projectName || selectedDO?.destination || 'Unknown Destination'}</p>
+                <p className="text-[14px] font-semibold text-slate-900">{selectedDO?.destination || 'Warehouse'}</p>
               </div>
             </div>
           </div>
 
           <div className="mt-2 pt-4 border-t border-slate-100">
-            <p className="text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-1">Live GPS Coordinates</p>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">Live GPS Coordinates</p>
+              <button 
+                onClick={() => fetchLocation(true)}
+                className="p-1 rounded-md hover:bg-slate-100 transition-colors"
+                title="Refresh Location"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-slate-400 ${isRefreshing ? 'animate-spin text-blue-500' : ''}`} />
+              </button>
+            </div>
             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 p-2.5 rounded-lg">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className={`w-2 h-2 rounded-full shrink-0 ${currentPos ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
               <p className="text-[13px] font-mono text-slate-700">
-                {currentPos[0].toFixed(6)}, {currentPos[1].toFixed(6)}
+                {currentPos ? `${currentPos[0].toFixed(6)}, ${currentPos[1].toFixed(6)}` : 'Waiting for GPS...'}
               </p>
             </div>
           </div>

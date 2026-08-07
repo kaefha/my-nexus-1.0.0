@@ -139,12 +139,12 @@ export default function VendorsPage() {
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
- <TableHead>Vendor Code</TableHead>
- <TableHead>Vendor Name</TableHead>
- <TableHead>Contact Person</TableHead>
- <TableHead>Contact Info</TableHead>
- <TableHead>Status</TableHead>
- <TableHead className="text-right">Action</TableHead>
+ <TableHead className="w-[250px]">Vendor Code</TableHead>
+ <TableHead className="w-[250px]">Vendor Name</TableHead>
+ <TableHead className="w-[200px]">Contact Person</TableHead>
+ <TableHead className="w-[200px]">Contact Info</TableHead>
+ <TableHead className="w-[120px]">Status</TableHead>
+ <TableHead className="w-[80px] text-right">Action</TableHead>
  </TableRow>
  </TableHeader>
  <TableBody>

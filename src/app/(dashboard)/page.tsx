@@ -208,7 +208,7 @@ export default function DashboardPage() {
  <TableRow>
  <TableHead className="w-[180px]">RFC Number</TableHead>
  <TableHead className="w-[120px]">Status</TableHead>
- <TableHead className="text-right">Date</TableHead>
+ <TableHead className="w-[150px] text-right">Date</TableHead>
  </TableRow>
  </TableHeader>
  <TableBody>
@@ -333,9 +333,9 @@ export default function DashboardPage() {
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
- <TableHead>Material</TableHead>
- <TableHead className="text-right">Qty</TableHead>
- <TableHead className="text-right hidden sm:table-cell">Date</TableHead>
+ <TableHead className="w-[250px]">Material</TableHead>
+ <TableHead className="w-[100px] text-right">Qty</TableHead>
+ <TableHead className="w-[150px] text-right hidden sm:table-cell">Date</TableHead>
  </TableRow>
  </TableHeader>
  <TableBody>

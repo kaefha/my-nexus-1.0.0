@@ -6,14 +6,26 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const search = (searchParams.get('search') || '').toLowerCase();
-    
+    const search = searchParams.get('search');
+    const type = searchParams.get('type');
+
     let queryStr = 'SELECT * FROM purchase_orders';
     const queryParams: any[] = [];
+    const conditions = [];
 
     if (search) {
-      queryStr += ` WHERE LOWER(po_number) LIKE $1 OR LOWER(vendor) LIKE $1`;
-      queryParams.push(`%${search}%`);
+      conditions.push(`LOWER(po_number) LIKE $1 OR LOWER(vendor) LIKE $1`);
+      queryParams.push(`%${search.toLowerCase()}%`);
+    }
+
+    if (type === 'active') {
+      conditions.push(`status IN ('DRAFT', 'WAITING_APPROVAL')`);
+    } else if (type === 'history') {
+      conditions.push(`status IN ('APPROVED', 'REJECTED', 'PROCESSED', 'SHIPPED', 'DELIVERED', 'COMPLETED')`);
+    }
+
+    if (conditions.length > 0) {
+      queryStr += ` WHERE ${conditions.join(' AND ')}`;
     }
 
     queryStr += ' ORDER BY created_at DESC';
@@ -43,7 +55,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { poNumber, vendor, rfcId, expectedDate, notes, items } = body;
+    const { poNumber, vendor, rfcId, expectedDate, notes, items, transporter, driverName, vehicleNumber, deliverTo } = body;
 
     if (!poNumber || !vendor) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
@@ -56,10 +68,16 @@ export async function POST(request: Request) {
       await client.query('BEGIN');
       
       const res = await client.query(`
-        INSERT INTO purchase_orders (id, po_number, vendor, rfc_id, expected_date, notes, status, items_count)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO purchase_orders (
+          id, po_number, vendor, rfc_id, expected_date, notes, status, items_count,
+          transporter, driver_name, vehicle_number, deliver_to
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING *
-      `, [id, poNumber, vendor, rfcId || null, expectedDate ? new Date(expectedDate) : null, notes || '', 'DRAFT', items?.length || 0]);
+      `, [
+        id, poNumber, vendor, rfcId || null, expectedDate ? new Date(expectedDate) : null, notes || '', 'DRAFT', items?.length || 0,
+        transporter || null, driverName || null, vehicleNumber || null, deliverTo || null
+      ]);
 
       if (items && items.length > 0) {
         for (const item of items) {
@@ -83,6 +101,11 @@ export async function POST(request: Request) {
         notes: row.notes,
         status: row.status,
         itemsCount: row.items_count,
+        transporter: row.transporter,
+        driverName: row.driver_name,
+        vehicleNumber: row.vehicle_number,
+        deliverTo: row.deliver_to,
+        signedDocumentUrl: row.signed_document_url,
         createdAt: row.created_at,
         updatedAt: row.updated_at
       };

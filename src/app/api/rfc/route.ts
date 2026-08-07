@@ -31,8 +31,12 @@ export async function GET(request: Request) {
     }
 
     if (status && status !== 'ALL') {
-      queryParams.push(status);
-      queryStr += ` AND r.status = $${queryParams.length}`;
+      if (status === 'HISTORY') {
+        queryStr += ` AND r.status IN ('APPROVED', 'REJECTED')`;
+      } else {
+        queryParams.push(status);
+        queryStr += ` AND r.status = $${queryParams.length}`;
+      }
     }
 
     if (startDate) {

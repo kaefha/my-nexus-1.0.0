@@ -28,6 +28,8 @@ export async function GET(request: Request) {
       startDate: row.start_date,
       endDate: row.end_date,
       pic: row.pic,
+      whatsappNumber: row.whatsapp_number,
+      projectType: row.project_type,
       status: row.status,
       createdAt: row.created_at,
       updatedAt: row.updated_at
@@ -43,7 +45,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { projectName, customer, region, startDate, pic, status } = body;
+    const { projectName, customer, region, startDate, pic, whatsappNumber, projectType, status } = body;
 
     if (!projectName) {
       return NextResponse.json({ message: 'Project name is required' }, { status: 400 });
@@ -52,10 +54,10 @@ export async function POST(request: Request) {
     const id = generateId();
 
     const res = await pool.query(`
-      INSERT INTO projects (id, project_name, customer, region, start_date, pic, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO projects (id, project_name, customer, region, start_date, pic, whatsapp_number, project_type, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
-    `, [id, projectName, customer, region, startDate || null, pic, status || 'PLANNING']);
+    `, [id, projectName, customer, region, startDate || null, pic, whatsappNumber || null, projectType || null, status || 'PLANNING']);
 
     await pool.query(`
       INSERT INTO project_activities (id, project_id, action, details)
@@ -71,6 +73,8 @@ export async function POST(request: Request) {
       startDate: row.start_date,
       endDate: row.end_date,
       pic: row.pic,
+      whatsappNumber: row.whatsapp_number,
+      projectType: row.project_type,
       status: row.status,
       createdAt: row.created_at,
       updatedAt: row.updated_at
@@ -86,7 +90,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { id, projectName, customer, region, startDate, pic, status } = body;
+    const { id, projectName, customer, region, startDate, pic, whatsappNumber, projectType, status } = body;
 
     if (!id || !projectName) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
@@ -107,10 +111,10 @@ export async function PUT(request: Request) {
       const res = await client.query(`
         UPDATE projects 
         SET project_name = $1, customer = $2, region = $3, start_date = $4, 
-            pic = $5, status = $6, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $7
+            pic = $5, whatsapp_number = $6, project_type = $7, status = $8, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $9
         RETURNING *
-      `, [projectName, customer, region, startDate || null, pic, newStatus, id]);
+      `, [projectName, customer, region, startDate || null, pic, whatsappNumber || null, projectType || null, newStatus, id]);
 
       updatedRow = res.rows[0];
 

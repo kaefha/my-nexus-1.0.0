@@ -148,16 +148,16 @@ export default function WarehouseOperationsPage() {
 
             if (viewMode === 'list') {
               return (
-                <div className="rounded-md border bg-card overflow-hidden">
+                <div className="w-full">
                   <Table className="whitespace-nowrap">
                     <TableHeader>
                       <TableRow>
-                        <TableHead>ID / Code</TableHead>
-                        <TableHead>Warehouse Name</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Location</TableHead>
-                        <TableHead className="text-right">Capacity</TableHead>
-                        <TableHead className="text-center">Status</TableHead>
+                        <TableHead className="w-[150px]">ID / Code</TableHead>
+                        <TableHead className="w-[250px]">Warehouse Name</TableHead>
+                        <TableHead className="w-[150px]">Type</TableHead>
+                        <TableHead className="w-[200px]">Location</TableHead>
+                        <TableHead className="w-[100px] text-right">Capacity</TableHead>
+                        <TableHead className="w-[120px] text-center">Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -166,7 +166,7 @@ export default function WarehouseOperationsPage() {
                           <TableCell className="font-medium">{wh.code}</TableCell>
                           <TableCell>{wh.name}</TableCell>
                           <TableCell><span className="text-xs px-2 py-0.5 bg-muted rounded-full">{wh.type || 'MAIN'}</span></TableCell>
-                          <TableCell className="max-w-[200px] truncate" title={wh.location}>{wh.location || '-'}</TableCell>
+                          <TableCell className="whitespace-normal max-w-[300px]" title={wh.location}>{wh.location || '-'}</TableCell>
                           <TableCell className="text-right">{wh.capacity ? `${wh.capacity} CBM` : '-'}</TableCell>
                           <TableCell className="text-center">
                             <span className={`font-medium ${wh.status === 'ACTIVE' ? 'text-green-600' : 'text-red-600'}`}>
@@ -193,9 +193,9 @@ export default function WarehouseOperationsPage() {
                       <CardDescription>{wh.code}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3 text-sm">
-                      <div className="flex items-center gap-2 text-muted-foreground relative group w-fit cursor-default">
-                        <MapPin className="w-4 h-4 shrink-0" />
-                        <span className="truncate">{wh.location || 'No location set'}</span>
+                      <div className="flex items-start gap-2 text-muted-foreground relative group cursor-default">
+                        <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span className="whitespace-normal break-words">{wh.location || 'No location set'}</span>
                         
                         {wh.coordinates && (
                           <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 w-72 h-48 bg-card border rounded-xl shadow-xl p-1.5 origin-bottom scale-95 group-hover:scale-100 pointer-events-none">
@@ -315,16 +315,16 @@ export default function WarehouseOperationsPage() {
             />
           </div>
 
-          <div className="rounded-md border bg-card">
+          <div className="w-full">
             <Table className="whitespace-nowrap">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Warehouse</TableHead>
-                  <TableHead>Material Code</TableHead>
-                  <TableHead>Material Name</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="text-right">Quantity</TableHead>
-                  <TableHead className="text-right">Last Updated</TableHead>
+                  <TableHead className="w-[250px]">Warehouse</TableHead>
+                  <TableHead className="w-[250px]">Material Code</TableHead>
+                  <TableHead className="w-[250px]">Material Name</TableHead>
+                  <TableHead className="w-[150px]">Category</TableHead>
+                  <TableHead className="w-[100px] text-right">Quantity</TableHead>
+                  <TableHead className="w-[150px] text-right">Last Updated</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

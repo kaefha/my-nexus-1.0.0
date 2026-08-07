@@ -157,6 +157,17 @@ const initDb = async () => {
       );
     `);
 
+    // Delivery Tracking Logs
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS delivery_tracking_logs (
+        id UUID PRIMARY KEY,
+        delivery_order_id UUID REFERENCES delivery_orders(id) ON DELETE CASCADE,
+        latitude DECIMAL(10, 8) NOT NULL,
+        longitude DECIMAL(11, 8) NOT NULL,
+        recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Warehouses
     await client.query(`
       CREATE TABLE IF NOT EXISTS warehouses (

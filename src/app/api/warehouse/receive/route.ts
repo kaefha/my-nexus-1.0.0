@@ -8,18 +8,18 @@ export async function POST(request: Request) {
   
   try {
     const body = await request.json();
-    const { poId, warehouseId, items } = body;
+    const { doId, warehouseId, items } = body;
 
-    if (!poId || !warehouseId || !items || !items.length) {
+    if (!doId || !warehouseId || !items || !items.length) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
     }
 
     await client.query('BEGIN');
 
-    // 1. Verify PO exists
-    const poRes = await client.query('SELECT * FROM purchase_orders WHERE id = $1', [poId]);
-    if (poRes.rows.length === 0) {
-      throw new Error('Purchase Order not found');
+    // 1. Verify DO exists
+    const doRes = await client.query('SELECT * FROM delivery_orders WHERE id = $1', [doId]);
+    if (doRes.rows.length === 0) {
+      throw new Error('Delivery Order not found');
     }
 
     // 2. Process each received item
@@ -56,15 +56,15 @@ export async function POST(request: Request) {
         INSERT INTO inventory_transactions 
         (id, warehouse_id, material_id, transaction_type, quantity, reference_id, notes)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `, [txId, warehouseId, item.materialId, 'PO_RECEIPT', qty, poId, 'Received from PO']);
+      `, [txId, warehouseId, item.materialId, 'DO_RECEIPT', qty, doId, 'Received from DO']);
     }
 
-    // 3. Update PO status to COMPLETED
+    // 3. Update DO status to COMPLETED
     await client.query(`
-      UPDATE purchase_orders 
+      UPDATE delivery_orders 
       SET status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
-    `, [poId]);
+    `, [doId]);
 
     await client.query('COMMIT');
 

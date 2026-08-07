@@ -29,6 +29,13 @@ export async function POST(
       VALUES ($1, $2, $3, $4)
     `, [id, doId, latitude, longitude]);
 
+    // Update DO status to SHIPPING if it's currently WAITING
+    await pool.query(`
+      UPDATE delivery_orders 
+      SET status = 'SHIPPING' 
+      WHERE id = $1 AND status = 'WAITING'
+    `, [doId]);
+
     return NextResponse.json({ message: 'Location recorded successfully' }, { status: 201 });
   } catch (error: any) {
     console.error('Error recording location:', error);
@@ -45,10 +52,10 @@ export async function GET(
     
     // Fetch latest location
     const result = await pool.query(`
-      SELECT latitude, longitude, created_at 
+      SELECT latitude, longitude, recorded_at as created_at
       FROM delivery_tracking_logs 
       WHERE delivery_order_id = $1 
-      ORDER BY created_at DESC 
+      ORDER BY recorded_at DESC 
       LIMIT 1
     `, [doId]);
 
@@ -59,6 +66,6 @@ export async function GET(
     return NextResponse.json(result.rows[0], { status: 200 });
   } catch (error: any) {
     console.error('Error fetching location:', error);
-    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ message: error.message || 'Internal server error' }, { status: 500 });
   }
 }

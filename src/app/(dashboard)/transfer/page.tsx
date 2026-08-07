@@ -108,13 +108,13 @@ export default function TransferPage() {
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
- <TableHead>Transfer Number</TableHead>
- <TableHead>From</TableHead>
- <TableHead>To</TableHead>
- <TableHead>Date</TableHead>
- <TableHead>PIC</TableHead>
- <TableHead>Status</TableHead>
- <TableHead className="text-right">Action</TableHead>
+ <TableHead className="w-[150px]">Transfer Number</TableHead>
+ <TableHead className="w-[150px]">From</TableHead>
+ <TableHead className="w-[150px]">To</TableHead>
+ <TableHead className="w-[150px]">Date</TableHead>
+ <TableHead className="w-[200px]">PIC</TableHead>
+ <TableHead className="w-[120px]">Status</TableHead>
+ <TableHead className="w-[80px] text-right">Action</TableHead>
  </TableRow>
  </TableHeader>
  <TableBody>

@@ -37,6 +37,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { ChevronRight } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 const groupedNavigation = [
   {
@@ -68,6 +69,7 @@ const groupedNavigation = [
         children: [
           { label: 'RFC List', href: '/rfc' },
           { label: 'Approval Queue', href: '/rfc/approval' },
+          { label: 'RFC History', href: '/rfc/history' },
         ],
       },
       {
@@ -75,8 +77,8 @@ const groupedNavigation = [
         href: '/procurement',
         icon: ShoppingCart,
         children: [
-          { label: 'Purchase Orders', href: '/procurement' },
-          { label: 'Vendors', href: '/procurement/vendors' },
+          { label: 'Active POs', href: '/procurement' },
+          { label: 'PO History', href: '/procurement/history' },
         ],
       },
       {
@@ -139,13 +141,34 @@ const groupedNavigation = [
   }
 ];
 
-function NavCollapsible({ item, pathname }: { item: any, pathname: string }) {
+function NavCollapsible({ item, pathname, counts }: { item: any, pathname: string, counts: any }) {
   const isItemActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
   const [open, setOpen] = React.useState(isItemActive);
 
   React.useEffect(() => {
     if (isItemActive) setOpen(true);
   }, [isItemActive]);
+
+  const getBadgeForLabel = (label: string) => {
+    if (label === 'Approval Queue' && counts.rfcApprovals > 0) {
+      return <Badge variant="destructive" className="ml-auto h-5 px-1.5 flex items-center justify-center text-[10px]">{counts.rfcApprovals}</Badge>;
+    }
+    if (label === 'Active POs' && counts.poApprovals > 0) {
+      return <Badge variant="destructive" className="ml-auto h-5 px-1.5 flex items-center justify-center text-[10px]">{counts.poApprovals}</Badge>;
+    }
+    if (label === 'Material Receive' && counts.materialReceives > 0) {
+      return <Badge variant="destructive" className="ml-auto h-5 px-1.5 flex items-center justify-center text-[10px]">{counts.materialReceives}</Badge>;
+    }
+    return null;
+  };
+
+  // Check if group itself needs a badge
+  const groupHasNotification = () => {
+    if (item.label === 'RFC Management' && counts.rfcApprovals > 0) return true;
+    if (item.label === 'Procurement' && counts.poApprovals > 0) return true;
+    if (item.label === 'Warehouse' && counts.materialReceives > 0) return true;
+    return false;
+  };
 
   return (
     <Collapsible
@@ -161,6 +184,9 @@ function NavCollapsible({ item, pathname }: { item: any, pathname: string }) {
         >
           <item.icon />
           <span>{item.label}</span>
+          {!open && groupHasNotification() && (
+            <div className="w-2 h-2 rounded-full bg-destructive absolute right-10 top-1/2 -translate-y-1/2" />
+          )}
           <ChevronRight className={`ml-auto transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
         </SidebarMenuButton>
         <CollapsibleContent>
@@ -172,6 +198,7 @@ function NavCollapsible({ item, pathname }: { item: any, pathname: string }) {
                   render={<Link href={child.href} />}
                 >
                   <span>{child.label}</span>
+                  {getBadgeForLabel(child.label)}
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
             ))}
@@ -184,6 +211,20 @@ function NavCollapsible({ item, pathname }: { item: any, pathname: string }) {
 
 export default function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const [counts, setCounts] = React.useState({ rfcApprovals: 0, poApprovals: 0, materialReceives: 0 });
+
+  React.useEffect(() => {
+    const fetchCounts = async () => {
+      try {
+        const res = await fetch('/api/notifications/counts');
+        const json = await res.json();
+        if (json.data) setCounts(json.data);
+      } catch(e) {
+        console.error("Failed to fetch notification counts", e);
+      }
+    };
+    fetchCounts();
+  }, [pathname]); // Refetch on route change
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
@@ -217,7 +258,7 @@ export default function AppSidebar({ ...props }: React.ComponentProps<typeof Sid
                   const isItemActive = isActive(item.href);
                   
                   if (hasChildren) {
-                    return <NavCollapsible key={item.label} item={item} pathname={pathname} />;
+                    return <NavCollapsible key={item.label} item={item} pathname={pathname} counts={counts} />;
                   }
 
                   return (

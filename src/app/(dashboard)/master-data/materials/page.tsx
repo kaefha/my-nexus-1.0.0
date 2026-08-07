@@ -242,10 +242,10 @@ export default function MaterialsPage() {
  <TableHeader>
  <TableRow>
  <TableHead className="w-[150px]">Code</TableHead>
- <TableHead>Name</TableHead>
- <TableHead>Group</TableHead>
- <TableHead>UOM</TableHead>
- <TableHead className="text-right">Action</TableHead>
+ <TableHead className="w-[250px]">Name</TableHead>
+ <TableHead className="w-[150px]">Group</TableHead>
+ <TableHead className="w-[150px]">UOM</TableHead>
+ <TableHead className="w-[80px] text-right">Action</TableHead>
  </TableRow>
  </TableHeader>
  <TableBody>
@@ -254,7 +254,7 @@ export default function MaterialsPage() {
  <TableCell className="font-medium text-primary">
  {material.materialCode}
  </TableCell>
- <TableCell className="font-medium">
+ <TableCell className="font-medium whitespace-normal max-w-[350px] break-words">
  {material.materialName}
  </TableCell>
  <TableCell>

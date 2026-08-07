@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ShoppingCart, Search, Eye, Plus, Loader2, CheckCircle2, XCircle, Send } from 'lucide-react';
+import { ShoppingCart, Search, Eye, Plus, Loader2, CheckCircle2, XCircle, Send, Pencil, Trash2, MoreHorizontal, Printer, Upload, FileText } from 'lucide-react';
 import api from '@/lib/api';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { formatDate } from '@/lib/utils';
@@ -14,6 +14,13 @@ import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+
+interface POItem {
+  id?: string;
+  materialName: string;
+  quantity: number;
+}
 
 export default function ProcurementPage() {
  const { user } = useAuth();
@@ -21,17 +28,22 @@ export default function ProcurementPage() {
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
  
- const [formData, setFormData] = useState<any>({
- poNumber: '',
- vendor: '',
- rfcId: '',
- expectedDate: '',
- notes: '',
- items: []
+ const [formData, setFormData] = useState({
+   poNumber: '',
+   vendor: '',
+   rfcId: '',
+   expectedDate: '',
+   notes: '',
+   transporter: '',
+   driverName: '',
+   vehicleNumber: '',
+   deliverTo: '',
+   items: [] as POItem[]
  });
  const [approvedRfcs, setApprovedRfcs] = useState<any[]>([]);
  const [isFetchingRfc, setIsFetchingRfc] = useState(false);
  const [vendors, setVendors] = useState<any[]>([]);
+ const [isEditMode, setIsEditMode] = useState(false);
 
  // View PO state
  const [isOpen, setIsOpen] = useState(false);
@@ -39,12 +51,22 @@ export default function ProcurementPage() {
  const [isViewOpen, setIsViewOpen] = useState(false);
  const [selectedPo, setSelectedPo] = useState<any>(null);
  const [isLoadingPo, setIsLoadingPo] = useState(false);
+ 
+ // Delete PO state
+ const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+ const [poToDelete, setPoToDelete] = useState<string | null>(null);
+
+ // Upload Signed Doc state
+ const [isUploadOpen, setIsUploadOpen] = useState(false);
+ const [selectedPoForUpload, setSelectedPoForUpload] = useState<string | null>(null);
+ const [signedDocument, setSignedDocument] = useState<File | null>(null);
+ const [isUploading, setIsUploading] = useState(false);
 
  const fetchPOs = async () => {
- setLoading(true);
- try {
- const { data } = await api.get('/api/procurement', { params: { search } });
- setPos(data.data || []);
+  setLoading(true);
+  try {
+  const { data } = await api.get('/api/procurement', { params: { search, type: 'active' } });
+  setPos(data.data || []);
  } catch (e) { 
  console.error(e); 
  } finally { 
@@ -100,20 +122,67 @@ export default function ProcurementPage() {
    }
  };
 
- const handleViewPO = async (id: string) => {
-   setIsViewOpen(true);
-   setIsLoadingPo(true);
-   setSelectedPo(null);
-   try {
-     const { data } = await api.get(`/api/procurement/${id}`);
-     setSelectedPo(data.data);
-   } catch (error) {
-     console.error('Error fetching PO details:', error);
-     alert('Failed to load PO details');
-   } finally {
-     setIsLoadingPo(false);
-   }
- };
+  const handleViewPO = async (id: string) => {
+    setIsViewOpen(true);
+    setIsLoadingPo(true);
+    setSelectedPo(null);
+    try {
+      const { data } = await api.get(`/api/procurement/${id}`);
+      setSelectedPo(data.data);
+    } catch (error) {
+      console.error('Error fetching PO details:', error);
+      toast.error('Failed to load PO details');
+    } finally {
+      setIsLoadingPo(false);
+    }
+  };
+
+  const handleEditPO = async (id: string) => {
+    setIsOpen(true);
+    setIsEditMode(true);
+    try {
+      const { data } = await api.get(`/api/procurement/${id}`);
+      const po = data.data;
+      setFormData({
+        poNumber: po.poNumber || '',
+        vendor: po.vendor || '',
+        rfcId: po.rfcId || '',
+        expectedDate: po.expectedDate ? new Date(po.expectedDate).toISOString().split('T')[0] : '',
+        notes: po.notes || '',
+        transporter: po.transporter || '',
+        driverName: po.driverName || '',
+        vehicleNumber: po.vehicleNumber || '',
+        deliverTo: po.deliverTo || '',
+        items: po.items || []
+      });
+    } catch (error) {
+      console.error('Error fetching PO details for edit:', error);
+      toast.error('Failed to load PO details');
+      setIsOpen(false);
+    }
+  };
+
+  const confirmDeletePO = (id: string) => {
+    setPoToDelete(id);
+    setIsDeleteOpen(true);
+  };
+
+  const handleDeletePO = async () => {
+    if (!poToDelete) return;
+    setIsSubmitting(true);
+    try {
+      await api.delete(`/api/procurement/${poToDelete}`);
+      toast.success('PO deleted successfully');
+      fetchPOs();
+      setIsDeleteOpen(false);
+      setPoToDelete(null);
+    } catch (error) {
+      console.error('Error deleting PO:', error);
+      toast.error('Failed to delete PO');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const updatePOStatus = async (status: string) => {
     if (!selectedPo) return;
@@ -132,21 +201,27 @@ export default function ProcurementPage() {
     }
   };
 
- const handleSubmit = async (e: React.FormEvent) => {
- e.preventDefault();
- setIsSubmitting(true);
- try {
- await api.post('/api/procurement', formData);
- setIsOpen(false);
- setFormData({ poNumber: '', vendor: '', rfcId: '', expectedDate: '', notes: '', items: [] });
- fetchPOs();
- } catch (error) {
- console.error('Error creating PO:', error);
- alert('Failed to create PO');
- } finally {
- setIsSubmitting(false);
- }
- };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      if (isEditMode && formData.id) {
+        await api.put(`/api/procurement/${formData.id}`, formData);
+        toast.success('PO updated successfully');
+      } else {
+        await api.post('/api/procurement', formData);
+        toast.success('PO created successfully');
+      }
+      setIsOpen(false);
+      setFormData({ poNumber: '', vendor: '', rfcId: '', expectedDate: '', notes: '', transporter: '', driverName: '', vehicleNumber: '', deliverTo: '', items: [] });
+      fetchPOs();
+    } catch (error) {
+      console.error('Error saving PO:', error);
+      toast.error(isEditMode ? 'Failed to update PO' : 'Failed to create PO');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
  return (
  <div className="space-y-6">
@@ -166,9 +241,9 @@ export default function ProcurementPage() {
  className="pl-9"
  />
         </div>
-        <Button onClick={() => setIsOpen(true)} className="gap-2 ">
- <Plus className="w-4 h-4" /> New PO
- </Button>
+        <Button onClick={() => { setIsOpen(true); setIsEditMode(false); setFormData({ poNumber: '', vendor: '', rfcId: '', expectedDate: '', notes: '', transporter: '', driverName: '', vehicleNumber: '', deliverTo: '', items: [] }); }} className="gap-2 ">
+          <Plus className="w-4 h-4" /> New PO
+        </Button>
       </div>
 
  <div className="animate-fade-in" style={{ animationDelay: '200ms' }}>
@@ -181,11 +256,11 @@ export default function ProcurementPage() {
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
- <TableHead>PO Number</TableHead>
- <TableHead>Vendor</TableHead>
- <TableHead>Expected</TableHead>
- <TableHead>Status</TableHead>
- <TableHead className="text-right">Action</TableHead>
+ <TableHead className="w-[150px]">PO Number</TableHead>
+ <TableHead className="w-[250px]">Vendor</TableHead>
+ <TableHead className="w-[150px]">Expected</TableHead>
+ <TableHead className="w-[120px]">Status</TableHead>
+ <TableHead className="w-[80px] text-right">Action</TableHead>
  </TableRow>
  </TableHeader>
  <TableBody>
@@ -198,10 +273,38 @@ export default function ProcurementPage() {
  </TableCell>
  <TableCell><StatusBadge status={po.status} /></TableCell>
  <TableCell className="text-right">
-  <Button variant="ghost" size="sm" className="text-xs" onClick={() => handleViewPO(po.id)}>
-  View
-  </Button>
- </TableCell>
+   <DropdownMenu>
+     <DropdownMenuTrigger className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+       <span className="sr-only">Open menu</span>
+       <MoreHorizontal className="h-4 w-4" />
+     </DropdownMenuTrigger>
+     <DropdownMenuContent align="end" className="w-48">
+       <DropdownMenuItem onClick={() => handleViewPO(po.id)}>
+         <Eye className="w-4 h-4 mr-2" /> View Details
+       </DropdownMenuItem>
+        {po.signedDocumentUrl ? (
+          <DropdownMenuItem className="cursor-pointer" onClick={() => window.open(po.signedDocumentUrl, '_blank')}>
+            <FileText className="w-4 h-4 mr-2" /> Signed Doc
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem className="cursor-pointer" onClick={() => window.open(`/print/po/${po.id}`, '_blank')}>
+            <Printer className="w-4 h-4 mr-2" /> Print PDF
+          </DropdownMenuItem>
+        )}
+        {(user?.role === 'FINANCE' || user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
+          <DropdownMenuItem onClick={() => { setSelectedPoForUpload(po.id); setIsUploadOpen(true); }}>
+            <Upload className="w-4 h-4 mr-2" /> Upload Signed Doc
+          </DropdownMenuItem>
+        )}
+       <DropdownMenuItem onClick={() => handleEditPO(po.id)}>
+         <Pencil className="w-4 h-4 mr-2" /> Edit
+       </DropdownMenuItem>
+       <DropdownMenuItem onClick={() => confirmDeletePO(po.id)} className="text-destructive">
+         <Trash2 className="w-4 h-4 mr-2" /> Delete
+       </DropdownMenuItem>
+     </DropdownMenuContent>
+   </DropdownMenu>
+  </TableCell>
  </TableRow>
  ))}
  </TableBody>
@@ -218,77 +321,120 @@ export default function ProcurementPage() {
  </div>
 
  <Dialog open={isOpen} onOpenChange={setIsOpen}>
- <DialogContent className="sm:max-w-xl">
+ <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
  <form onSubmit={handleSubmit}>
  <DialogHeader>
- <DialogTitle>New Purchase Order</DialogTitle>
- <DialogDescription>Create a new purchase order for materials.</DialogDescription>
+ <DialogTitle>{isEditMode ? 'Edit Purchase Order' : 'New Purchase Order'}</DialogTitle>
+ <DialogDescription>{isEditMode ? 'Update the details of this purchase order.' : 'Create a new purchase order for materials.'}</DialogDescription>
  </DialogHeader>
- <div className="grid gap-4 py-4">
- <div className="grid gap-2">
- <Label htmlFor="poNumber">PO Number *</Label>
- <Input 
- id="poNumber" 
- placeholder="e.g. PO-2026-001" 
- value={formData.poNumber}
- onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
- required 
- />
- </div>
- <div className="grid gap-2">
-   <Label htmlFor="rfcRef">Reference RFC Number</Label>
-   <Select value={formData.rfcId || 'none'} onValueChange={handleRfcChange} disabled={isFetchingRfc}>
-     <SelectTrigger id="rfcRef" className="w-full" style={{ width: '100%' }}>
+ <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+  <div className="space-y-4">
+    <div className="grid gap-2">
+    <Label htmlFor="poNumber">PO Number *</Label>
+    <Input 
+    id="poNumber" 
+    placeholder="e.g. PO-2026-001" 
+    value={formData.poNumber}
+    onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
+    required 
+    />
+    </div>
+    <div className="grid gap-2">
+      <Label htmlFor="rfcRef">Reference RFC Number</Label>
+      <Select value={formData.rfcId || 'none'} onValueChange={handleRfcChange} disabled={isFetchingRfc}>
+        <SelectTrigger id="rfcRef" className="w-full">
        <SelectValue placeholder="Select an approved RFC (Optional)" />
      </SelectTrigger>
      <SelectContent>
        <SelectItem value="none">None (Manual PO)</SelectItem>
-       {approvedRfcs.map(rfc => (
-         <SelectItem key={rfc.id} value={rfc.id}>{rfc.rfcNumber}</SelectItem>
-       ))}
-     </SelectContent>
-   </Select>
- </div>
- {formData.items?.length > 0 && (
-   <div className="grid gap-1 bg-muted/30 p-3 rounded-md border text-sm">
-     <span className="font-medium text-muted-foreground mb-1">Auto-filled Items from RFC:</span>
-     {formData.items.map((item: any, idx: number) => (
-       <div key={idx} className="flex justify-between">
-         <span>{item.materialName}</span>
-         <span className="font-semibold">{item.quantity} units</span>
-       </div>
-     ))}
-   </div>
- )}
- <div className="grid gap-2">
-  <Label htmlFor="vendor">Vendor Name *</Label>
-  <Select value={formData.vendor} onValueChange={(val) => setFormData({...formData, vendor: val})} required>
-    <SelectTrigger id="vendor" className="w-full" style={{ width: '100%' }}>
-      <SelectValue placeholder="Select a vendor" />
-    </SelectTrigger>
-    <SelectContent>
-      {vendors.map(v => (
-        <SelectItem key={v.id} value={v.name}>{v.name}</SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
- </div>
- <div className="grid gap-2">
- <Label htmlFor="expectedDate">Expected Date</Label>
- <DatePicker 
- value={formData.expectedDate}
- onChange={(value) => setFormData({...formData, expectedDate: value})}
- />
- </div>
- <div className="grid gap-2">
- <Label htmlFor="notes">Notes</Label>
- <Input 
- id="notes" 
- placeholder="Optional notes" 
- value={formData.notes}
- onChange={(e) => setFormData({...formData, notes: e.target.value})}
- />
- </div>
+        {approvedRfcs.map(rfc => (
+          <SelectItem key={rfc.id} value={rfc.id}>{rfc.rfcNumber}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+    </div>
+    <div className="grid gap-2">
+     <Label htmlFor="vendor">Vendor Name *</Label>
+     <Select value={formData.vendor} onValueChange={(val) => setFormData({...formData, vendor: val})} required>
+       <SelectTrigger id="vendor" className="w-full">
+         <SelectValue placeholder="Select a vendor" />
+       </SelectTrigger>
+       <SelectContent>
+         {vendors.map(v => (
+           <SelectItem key={v.id} value={v.name}>{v.name}</SelectItem>
+         ))}
+       </SelectContent>
+     </Select>
+    </div>
+    <div className="grid gap-2">
+    <Label htmlFor="expectedDate">Expected Date</Label>
+    <DatePicker 
+    value={formData.expectedDate}
+    onChange={(value) => setFormData({...formData, expectedDate: value})}
+    />
+    </div>
+    <div className="grid gap-2">
+    <Label htmlFor="notes">Notes</Label>
+    <Input 
+    id="notes" 
+    placeholder="Optional notes" 
+    value={formData.notes}
+    onChange={(e) => setFormData({...formData, notes: e.target.value})}
+    />
+    </div>
+  </div>
+
+  <div className="space-y-4">
+    <div className="grid gap-2">
+    <Label htmlFor="transporter">Transporter / Ekspedisi</Label>
+    <Input 
+    id="transporter" 
+    placeholder="e.g. PT. Lintas Benua Ekspres" 
+    value={formData.transporter}
+    onChange={(e) => setFormData({...formData, transporter: e.target.value})}
+    />
+    </div>
+    <div className="grid gap-2">
+    <Label htmlFor="driverName">Driver Name</Label>
+    <Input 
+    id="driverName" 
+    placeholder="e.g. Budi Santoso" 
+    value={formData.driverName}
+    onChange={(e) => setFormData({...formData, driverName: e.target.value})}
+    />
+    </div>
+    <div className="grid gap-2">
+    <Label htmlFor="vehicleNumber">Truck / Vehicle Number</Label>
+    <Input 
+    id="vehicleNumber" 
+    placeholder="e.g. B 9012 CDE" 
+    value={formData.vehicleNumber}
+    onChange={(e) => setFormData({...formData, vehicleNumber: e.target.value})}
+    />
+    </div>
+    <div className="grid gap-2">
+    <Label htmlFor="deliverTo">Deliver To</Label>
+    <Input 
+    id="deliverTo" 
+    placeholder="e.g. Proyek Pembangunan Jalur Kereta Api Lintas Makassar - Parepare" 
+    value={formData.deliverTo}
+    onChange={(e) => setFormData({...formData, deliverTo: e.target.value})}
+    />
+    </div>
+    {formData.items?.length > 0 && (
+      <div className="grid gap-1 bg-muted/30 p-3 rounded-md border text-sm mt-2">
+        <span className="font-medium text-muted-foreground mb-1">Auto-filled Items from RFC:</span>
+        <div className="max-h-[200px] overflow-y-auto space-y-1">
+          {formData.items.map((item: any, idx: number) => (
+            <div key={idx} className="flex justify-between items-center bg-background px-2 py-1 rounded border">
+              <span className="truncate pr-2">{item.materialName}</span>
+              <span className="font-semibold whitespace-nowrap">{item.quantity} units</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
  </div>
  <DialogFooter>
  <Button type="button" variant="outline" onClick={() => setIsOpen(false)} disabled={isSubmitting}>
@@ -333,6 +479,30 @@ export default function ProcurementPage() {
               <p className="text-muted-foreground mb-1">Expected Date</p>
               <p>{selectedPo.expectedDate ? formatDate(selectedPo.expectedDate) : '-'}</p>
             </div>
+            {selectedPo.transporter && (
+              <div className="col-span-2 md:col-span-1">
+                <p className="text-muted-foreground mb-1">Transporter / Ekspedisi</p>
+                <p className="font-medium">{selectedPo.transporter}</p>
+              </div>
+            )}
+            {selectedPo.driverName && (
+              <div className="col-span-2 md:col-span-1">
+                <p className="text-muted-foreground mb-1">Driver Name</p>
+                <p className="font-medium">{selectedPo.driverName}</p>
+              </div>
+            )}
+            {selectedPo.vehicleNumber && (
+              <div className="col-span-2 md:col-span-1">
+                <p className="text-muted-foreground mb-1">Vehicle Number</p>
+                <p className="font-medium">{selectedPo.vehicleNumber}</p>
+              </div>
+            )}
+            {selectedPo.deliverTo && (
+              <div className="col-span-2 md:col-span-1">
+                <p className="text-muted-foreground mb-1">Deliver To</p>
+                <p className="font-medium">{selectedPo.deliverTo}</p>
+              </div>
+            )}
             {selectedPo.rfcId && (
               <div className="col-span-2">
                 <p className="text-muted-foreground mb-1">Reference RFC ID</p>
@@ -362,9 +532,9 @@ export default function ProcurementPage() {
               <Table className="whitespace-nowrap">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Material</TableHead>
-                    <TableHead className="text-right">Quantity</TableHead>
-                    <TableHead>Notes</TableHead>
+                    <TableHead className="w-[250px]">Material</TableHead>
+                    <TableHead className="w-[100px] text-right">Quantity</TableHead>
+                    <TableHead className="w-[250px]">Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -394,7 +564,7 @@ export default function ProcurementPage() {
               Submit for Approval
             </Button>
           )}
-          {selectedPo?.status === 'WAITING_APPROVAL' && user?.role?.toUpperCase() === 'FINANCE' && (
+          {selectedPo?.status === 'WAITING_APPROVAL' && ['FINANCE', 'ADMIN', 'SUPER_ADMIN'].includes(user?.role?.toUpperCase() || '') && (
             <>
               <Button variant="default" onClick={() => updatePOStatus('APPROVED')} className="bg-green-600 hover:bg-green-700">
                 <CheckCircle2 className="w-4 h-4 mr-2" />
@@ -408,6 +578,81 @@ export default function ProcurementPage() {
           )}
         </div>
         <Button variant="outline" onClick={() => setIsViewOpen(false)}>Close</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  {/* Delete Confirmation Dialog */}
+  <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+    <DialogContent className="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>Confirm Deletion</DialogTitle>
+        <DialogDescription>
+          Are you sure you want to delete this purchase order? This action cannot be undone and will remove all associated items.
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter className="sm:justify-end gap-2 mt-4">
+        <Button variant="outline" onClick={() => setIsDeleteOpen(false)} disabled={isSubmitting}>
+          Cancel
+        </Button>
+        <Button variant="destructive" onClick={handleDeletePO} disabled={isSubmitting}>
+          {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+          Delete
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  {/* Upload Signed Doc Dialog */}
+  <Dialog open={isUploadOpen} onOpenChange={(open) => { setIsUploadOpen(open); if (!open) setSignedDocument(null); }}>
+    <DialogContent className="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>Upload Signed Purchase Order</DialogTitle>
+        <DialogDescription>
+          Upload the signed PDF version of this Purchase Order.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-4 py-4">
+        <div className="space-y-2">
+          <Label htmlFor="signedDocument">Signed Document</Label>
+          <Input 
+            id="signedDocument" 
+            type="file"
+            accept=".pdf,image/*"
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                setSignedDocument(e.target.files[0]);
+              }
+            }}
+          />
+        </div>
+      </div>
+      <DialogFooter className="sm:justify-end gap-2 mt-4">
+        <Button variant="outline" onClick={() => setIsUploadOpen(false)} disabled={isUploading}>
+          Cancel
+        </Button>
+        <Button 
+          disabled={!signedDocument || isUploading} 
+          onClick={async () => {
+            setIsUploading(true);
+            try {
+              // Simulate upload
+              await new Promise(r => setTimeout(r, 1000));
+              const fakeUrl = '/uploads/signed-po-' + selectedPoForUpload + '.pdf';
+              await api.patch(`/api/procurement/${selectedPoForUpload}`, { signedDocumentUrl: fakeUrl });
+              toast.success('Signed document uploaded successfully');
+              setIsUploadOpen(false);
+              fetchPOs();
+            } catch (error) {
+              toast.error('Failed to upload document');
+            } finally {
+              setIsUploading(false);
+            }
+          }}
+        >
+          {isUploading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
+          Upload
+        </Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>
