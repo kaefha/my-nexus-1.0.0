@@ -23,12 +23,14 @@ Aplikasi ini terbagi menjadi beberapa modul utama, baik yang bersifat transaksio
 
 ### 3. 📝 RFC (Request for Consumption) & Project Management
 - **End-to-End RFC Workflow**: Pembuatan, pengajuan, hingga persetujuan permintaan material oleh berbagai tingkatan manajemen (misal: Finance, Project Manager).
+- **Document Generation**: Pencetakan otomatis form pengajuan RFC dalam format standar (A4) untuk keperluan tanda tangan basah dan arsip fisik.
 - **Project Kanban**: Manajemen proyek dengan tampilan *board* untuk memantau status setiap fase proyek.
 - **Project Requirements**: Perincian kebutuhan material untuk setiap proyek yang sedang berjalan.
 
 ### 4. 🛒 Procurement (Pengadaan)
 - **Vendor Management**: Pengelolaan data pemasok/vendor.
 - **Purchase Orders (PO)**: Pembuatan dan pelacakan status pesanan pembelian. Terintegrasi dengan penerimaan barang (*Goods Receipt*).
+- **Delivery Order (DO) Generation**: Pencetakan surat jalan / Delivery Order secara otomatis (lengkap dengan data driver, nomor kendaraan, dan tujuan pengiriman) untuk mempercepat proses logistik.
 
 ### 5. 🚚 Logistics
 - **Shipment Tracking**: Pemantauan pengiriman barang secara *real-time* menggunakan peta interaktif (*Map Tracking*).
@@ -40,6 +42,11 @@ Pusat pengaturan data statis yang menjadi fondasi seluruh transaksi aplikasi:
 - **Warehouses**: Data gudang, lokasi, dan kapasitas.
 - **Vendors**: Data mitra penyedia barang.
 - **Users**: Manajemen hak akses (Role-Based Access Control) pengguna sistem.
+
+### 7. 🔐 Security & Workflow Automation
+- **Role-Based Access Control (RBAC)**: Pembatasan akses berdasarkan profil pengguna (misal: *Finance* hanya bisa *approve* pada tahap akhir).
+- **Admin Override / Bypass**: Akun *Admin* dan *Super Admin* memiliki akses istimewa untuk mengawasi dan mengambil alih (*bypass*) semua alur persetujuan darurat di dalam sistem.
+- **Notification Badges**: Indikator notifikasi *real-time* di *sidebar* untuk mengingatkan pengguna akan dokumen yang memerlukan persetujuan (*Pending Approvals*) atau barang yang harus segera diterima.
 
 ---
 
