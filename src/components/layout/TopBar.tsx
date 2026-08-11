@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -25,6 +26,24 @@ import { Badge } from '@/components/ui/badge';
 
 export default function TopBar() {
   const { user, logout } = useAuth();
+  const [notifications, setNotifications] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch('/api/dashboard/notifications');
+        if (res.ok) {
+          const data = await res.json();
+          setNotifications(data || []);
+        }
+      } catch (e) {
+        console.error('Error fetching notifications:', e);
+      }
+    };
+    if (user) {
+      fetchNotifications();
+    }
+  }, [user]);
 
   const getRoleLabel = (role: string) => {
     return role.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
@@ -56,17 +75,44 @@ export default function TopBar() {
           <DropdownMenuTrigger render={
             <Button variant="ghost" size="icon" className="relative cursor-pointer hover:bg-muted/50">
               <Bell className="w-5 h-5 text-muted-foreground" />
+              {notifications.length > 0 && (
+                <div className="absolute right-2 top-2 w-2 h-2 bg-destructive rounded-full" />
+              )}
             </Button>
           } />
-          <DropdownMenuContent align="end" className="w-72">
-            <div className="px-4 py-3 border-b">
+          <DropdownMenuContent align="end" className="w-80 max-h-[400px] overflow-y-auto">
+            <div className="px-4 py-3 border-b flex items-center justify-between sticky top-0 bg-background z-10">
               <p className="text-sm font-semibold">Notifications</p>
+              {notifications.length > 0 && (
+                <Badge variant="secondary" className="text-xs">{notifications.length} New</Badge>
+              )}
             </div>
-            <div className="py-8 text-center text-sm text-muted-foreground flex flex-col items-center justify-center">
-              <Bell className="w-8 h-8 mb-2 opacity-20" />
-              <p>You're all caught up!</p>
-              <p className="text-xs mt-1">No new notifications</p>
-            </div>
+            
+            {notifications.length > 0 ? (
+              <div className="flex flex-col">
+                {notifications.map((notif) => (
+                  <DropdownMenuItem key={notif.id} className="p-0 border-b last:border-0 cursor-pointer">
+                    <Link href={notif.link} className="flex flex-col gap-1 p-4 w-full hover:bg-muted/50 transition-colors">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium text-sm leading-tight text-foreground">{notif.title}</p>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          {new Date(notif.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                        {notif.message}
+                      </p>
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+              </div>
+            ) : (
+              <div className="py-8 text-center text-sm text-muted-foreground flex flex-col items-center justify-center">
+                <Bell className="w-8 h-8 mb-2 opacity-20" />
+                <p>You're all caught up!</p>
+                <p className="text-xs mt-1">No new notifications</p>
+              </div>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
