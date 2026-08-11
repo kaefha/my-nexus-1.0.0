@@ -1,24 +1,8 @@
 import { NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
+import * as xlsx from 'xlsx';
 
 export const dynamic = 'force-dynamic';
-
-function convertToCSV(data: any[]) {
-  if (data.length === 0) return '';
-  const headers = Object.keys(data[0]);
-  const rows = data.map(row => 
-    headers.map(header => {
-      const val = row[header];
-      // Escape quotes and wrap in quotes if contains comma
-      if (typeof val === 'string') {
-        const escaped = val.replace(/"/g, '""');
-        return `"${escaped}"`;
-      }
-      return val !== null && val !== undefined ? val : '';
-    }).join(',')
-  );
-  return [headers.join(','), ...rows].join('\n');
-}
 
 export async function GET(request: Request) {
   try {
@@ -26,7 +10,7 @@ export async function GET(request: Request) {
     const type = searchParams.get('type');
     
     let queryStr = '';
-    let filename = 'report.csv';
+    let filename = 'report.xlsx';
 
     switch(type) {
       case 'inventory':
@@ -36,7 +20,7 @@ export async function GET(request: Request) {
           FROM material_masters
           ORDER BY material_code ASC
         `;
-        filename = 'Inventory_Report.csv';
+        filename = 'Inventory_Report.xlsx';
         break;
       case 'rfc':
         queryStr = `
@@ -48,7 +32,7 @@ export async function GET(request: Request) {
           LEFT JOIN users u ON r.requestor_id = u.id
           ORDER BY r.created_at DESC
         `;
-        filename = 'RFC_Report.csv';
+        filename = 'RFC_Report.xlsx';
         break;
       case 'procurement':
         queryStr = `
@@ -57,7 +41,7 @@ export async function GET(request: Request) {
           FROM purchase_orders
           ORDER BY created_at DESC
         `;
-        filename = 'Procurement_Report.csv';
+        filename = 'Procurement_Report.xlsx';
         break;
       case 'warehouse':
         queryStr = `
@@ -66,7 +50,7 @@ export async function GET(request: Request) {
           FROM warehouses
           ORDER BY code ASC
         `;
-        filename = 'Warehouse_Report.csv';
+        filename = 'Warehouse_Report.xlsx';
         break;
       case 'project_consumption':
         queryStr = `
@@ -78,7 +62,7 @@ export async function GET(request: Request) {
           JOIN material_masters m ON req.material_id = m.id
           ORDER BY p.project_name ASC, m.material_name ASC
         `;
-        filename = 'Project_Consumption_Report.csv';
+        filename = 'Project_Consumption_Report.xlsx';
         break;
       default:
         return NextResponse.json({ message: 'Invalid report type' }, { status: 400 });
@@ -86,23 +70,22 @@ export async function GET(request: Request) {
 
     const res = await pool.query(queryStr);
     
+    const wb = xlsx.utils.book_new();
+    let wsData = res.rows;
+    
     if (res.rows.length === 0) {
-      // Return empty CSV with headers if possible, but we don't have headers without rows
-      // So we'll just return a single line indicating no data
-      const emptyCsv = "No data available for this report.";
-      return new NextResponse(emptyCsv, {
-        headers: {
-          'Content-Type': 'text/csv',
-          'Content-Disposition': `attachment; filename="${filename}"`
-        }
-      });
+      wsData = [{ Message: 'No data available for this report.' }];
     }
 
-    const csvContent = convertToCSV(res.rows);
+    const ws = xlsx.utils.json_to_sheet(wsData);
+    xlsx.utils.book_append_sheet(wb, ws, 'Report');
+    
+    const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-    return new NextResponse(csvContent, {
+    return new NextResponse(buffer, {
+      status: 200,
       headers: {
-        'Content-Type': 'text/csv',
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${filename}"`
       }
     });

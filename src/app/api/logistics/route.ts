@@ -71,7 +71,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { doNumber, origin, destination, poId, shippingDate, notes } = body;
+    const { doNumber, origin, originLat, originLng, destination, poId, shippingDate, notes } = body;
 
     if (!doNumber || !origin || !destination || !poId) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
@@ -100,9 +100,9 @@ export async function POST(request: Request) {
       }
 
       await client.query(`
-        INSERT INTO delivery_orders (id, do_number, origin, destination, project_id, rfc_id, po_id, shipping_date, notes, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      `, [id, doNumber, origin, destination, projectId, rfcId, poId, shippingDate || null, notes || '', 'WAITING']);
+        INSERT INTO delivery_orders (id, do_number, origin, origin_lat, origin_lng, destination, project_id, rfc_id, po_id, shipping_date, notes, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `, [id, doNumber, origin, originLat || null, originLng || null, destination, projectId, rfcId, poId, shippingDate || null, notes || '', 'WAITING']);
 
       // Copy items from PO to DO
       const itemsRes = await client.query('SELECT material_id, quantity FROM purchase_order_items WHERE purchase_order_id = $1', [poId]);

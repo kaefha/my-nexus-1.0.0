@@ -11,6 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDate } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
+import Link from 'next/link';
+import { DataTablePagination } from '@/components/shared/DataTablePagination';
 
 export default function WarehouseOperationsPage() {
   const [activeTab, setActiveTab] = useState('info');
@@ -18,27 +20,40 @@ export default function WarehouseOperationsPage() {
   // Warehouse Info State
   const [warehouseSearch, setWarehouseSearch] = useState('');
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  const [warehousePage, setWarehousePage] = useState(1);
+  const [warehousePageSize, setWarehousePageSize] = useState(10);
   
   // Stock State
   const [stocks, setStocks] = useState<any[]>([]);
   const [loadingStocks, setLoadingStocks] = useState(false);
   const [stockSearch, setStockSearch] = useState('');
+  const [stockPage, setStockPage] = useState(1);
+  const [stockPageSize, setStockPageSize] = useState(10);
   
   // Receipt State
   const [pos, setPos] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [receiptForm, setReceiptForm] = useState({ poId: '', warehouseId: '', doNumber: '', evidencePhotoUrl: '' });
+  const [receiptEvidence, setReceiptEvidence] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     fetchStocks();
-    fetchPOsAndWarehouses();
+    setStockPage(1);
   }, [stockSearch]);
+
+  useEffect(() => {
+    setWarehousePage(1);
+  }, [warehouseSearch]);
+
+  useEffect(() => {
+    fetchPOsAndWarehouses();
+  }, []);
 
   const fetchStocks = async () => {
     setLoadingStocks(true);
     try {
-      const { data } = await api.get('/api/inventory/stocks', { params: { search: stockSearch } });
+      const { data } = await api.get('/api/inventory/stocks', { params: { search: stockSearch, limit: 5000 } });
       setStocks(data.data || []);
     } catch (e) {
       console.error('Failed to fetch stocks', e);
@@ -53,7 +68,7 @@ export default function WarehouseOperationsPage() {
       const pendingPOs = (poRes.data.data || []).filter((po: any) => po.status !== 'COMPLETED');
       setPos(pendingPOs);
       
-      const whRes = await api.get('/api/warehouse', { params: { limit: 100 } });
+      const whRes = await api.get('/api/warehouse', { params: { limit: 5000 } });
       setWarehouses(whRes.data.data || []);
     } catch (e) {
       console.error('Failed to fetch POs or warehouses', e);
@@ -66,9 +81,29 @@ export default function WarehouseOperationsPage() {
     
     setIsSubmitting(true);
     try {
-      await api.post('/api/inventory/receipt', receiptForm);
+      let finalEvidenceUrl = receiptForm.evidencePhotoUrl;
+      
+      if (receiptEvidence) {
+        const uploadData = new FormData();
+        uploadData.append('file', receiptEvidence);
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: uploadData,
+        });
+        
+        if (uploadRes.ok) {
+          const { url } = await uploadRes.json();
+          finalEvidenceUrl = url;
+        } else {
+          throw new Error('Failed to upload evidence photo');
+        }
+      }
+
+      const payload = { ...receiptForm, evidencePhotoUrl: finalEvidenceUrl };
+      await api.post('/api/inventory/receipt', payload);
       alert('Goods Receipt processed successfully! Stock has been updated.');
       setReceiptForm({ poId: '', warehouseId: '', doNumber: '', evidencePhotoUrl: '' });
+      setReceiptEvidence(null);
       fetchPOsAndWarehouses();
       fetchStocks();
       setActiveTab('stocks');
@@ -89,7 +124,7 @@ export default function WarehouseOperationsPage() {
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val || "")} className="w-full">
         <TabsList className="grid w-full grid-cols-3 max-w-2xl h-11">
           <TabsTrigger value="info" className="gap-2"><WarehouseIcon className="w-4 h-4" /> Warehouses Info</TabsTrigger>
           <TabsTrigger value="receipt" className="gap-2"><PackageOpen className="w-4 h-4" /> Goods Receipt</TabsTrigger>
@@ -156,27 +191,42 @@ export default function WarehouseOperationsPage() {
                         <TableHead className="w-[250px]">Warehouse Name</TableHead>
                         <TableHead className="w-[150px]">Type</TableHead>
                         <TableHead className="w-[200px]">Location</TableHead>
+                        <TableHead className="w-[120px] text-center">Total Materials</TableHead>
                         <TableHead className="w-[100px] text-right">Capacity</TableHead>
                         <TableHead className="w-[120px] text-center">Status</TableHead>
+                        <TableHead className="w-[100px] text-right">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map(wh => (
+                      {filtered.slice((warehousePage - 1) * warehousePageSize, warehousePage * warehousePageSize).map(wh => (
                         <TableRow key={wh.id}>
                           <TableCell className="font-medium">{wh.code}</TableCell>
                           <TableCell>{wh.name}</TableCell>
                           <TableCell><span className="text-xs px-2 py-0.5 bg-muted rounded-full">{wh.type || 'MAIN'}</span></TableCell>
                           <TableCell className="whitespace-normal max-w-[300px]" title={wh.location}>{wh.location || '-'}</TableCell>
+                          <TableCell className="text-center font-medium">{wh.totalMaterials || 0}</TableCell>
                           <TableCell className="text-right">{wh.capacity ? `${wh.capacity} CBM` : '-'}</TableCell>
                           <TableCell className="text-center">
                             <span className={`font-medium ${wh.status === 'ACTIVE' ? 'text-green-600' : 'text-red-600'}`}>
                               {wh.status || 'ACTIVE'}
                             </span>
                           </TableCell>
+                          <TableCell className="text-right">
+                            <Link href={`/warehouse/${wh.id}`}>
+                              <Button variant="outline" size="sm">View Details</Button>
+                            </Link>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
+                  <DataTablePagination 
+                    totalItems={filtered.length} 
+                    pageSize={warehousePageSize} 
+                    currentPage={warehousePage} 
+                    onPageChange={setWarehousePage} 
+                    onPageSizeChange={setWarehousePageSize} 
+                  />
                 </div>
               );
             }
@@ -212,6 +262,12 @@ export default function WarehouseOperationsPage() {
                         )}
                       </div>
                       <div className="flex justify-between items-center pt-3 border-t">
+                        <span className="text-muted-foreground">Total Materials</span>
+                        <span className="font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs">
+                          {wh.totalMaterials || 0} unique
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Capacity</span>
                         <span className="font-medium">{wh.capacity ? `${wh.capacity} CBM` : 'Unspecified'}</span>
                       </div>
@@ -220,6 +276,11 @@ export default function WarehouseOperationsPage() {
                         <span className={`font-medium ${wh.status === 'ACTIVE' ? 'text-green-600' : 'text-red-600'}`}>
                           {wh.status || 'ACTIVE'}
                         </span>
+                      </div>
+                      <div className="pt-4 border-t mt-4">
+                        <Link href={`/warehouse/${wh.id}`} className="w-full">
+                          <Button variant="outline" className="w-full">View Details</Button>
+                        </Link>
                       </div>
                     </CardContent>
                   </Card>
@@ -242,7 +303,7 @@ export default function WarehouseOperationsPage() {
               <form onSubmit={handleReceiptSubmit} className="space-y-6 max-w-xl">
                 <div className="space-y-2">
                   <Label>Source Purchase Order</Label>
-                  <Select value={receiptForm.poId} onValueChange={(val) => setReceiptForm({...receiptForm, poId: val})}>
+                  <Select value={receiptForm.poId} onValueChange={(val) => setReceiptForm({ ...receiptForm, poId: val || "" })}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select an incoming PO" />
                     </SelectTrigger>
@@ -259,7 +320,7 @@ export default function WarehouseOperationsPage() {
 
                 <div className="space-y-2">
                   <Label>Destination Warehouse</Label>
-                  <Select value={receiptForm.warehouseId} onValueChange={(val) => setReceiptForm({...receiptForm, warehouseId: val})}>
+                  <Select value={receiptForm.warehouseId} onValueChange={(val) => setReceiptForm({ ...receiptForm, warehouseId: val || "" })}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select receiving warehouse" />
                     </SelectTrigger>
@@ -284,11 +345,17 @@ export default function WarehouseOperationsPage() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label>Photo Evidence URL</Label>
+                  <Label>Photo Evidence</Label>
                   <Input 
-                    placeholder="Paste link to Google Drive / image URL" 
-                    value={receiptForm.evidencePhotoUrl}
-                    onChange={(e) => setReceiptForm({ ...receiptForm, evidencePhotoUrl: e.target.value })}
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        setReceiptEvidence(e.target.files[0]);
+                      } else {
+                        setReceiptEvidence(null);
+                      }
+                    }}
                   />
                   <p className="text-xs text-muted-foreground">Required by SOP for material movement tracking.</p>
                 </div>
@@ -335,7 +402,7 @@ export default function WarehouseOperationsPage() {
                     </TableCell>
                   </TableRow>
                 ) : stocks.length > 0 ? (
-                  stocks.map((stock) => (
+                  stocks.slice((stockPage - 1) * stockPageSize, stockPage * stockPageSize).map((stock) => (
                     <TableRow key={stock.id}>
                       <TableCell className="font-medium">{stock.warehouseName}</TableCell>
                       <TableCell>{stock.materialCode}</TableCell>
@@ -356,6 +423,13 @@ export default function WarehouseOperationsPage() {
                 )}
               </TableBody>
             </Table>
+            <DataTablePagination 
+              totalItems={stocks.length} 
+              pageSize={stockPageSize} 
+              currentPage={stockPage} 
+              onPageChange={setStockPage} 
+              onPageSizeChange={setStockPageSize} 
+            />
           </div>
         </TabsContent>
       </Tabs>

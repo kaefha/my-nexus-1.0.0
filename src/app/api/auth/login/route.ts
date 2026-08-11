@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     const res = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     
     if (res.rowCount === 0) {
-      return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 });
+      return NextResponse.json({ message: 'Email atau password salah' }, { status: 401 });
     }
 
     const user = res.rows[0];
@@ -23,9 +23,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Account is inactive' }, { status: 401 });
     }
 
-    // Since we don't have a password column in the current schema,
-    // we bypass the password check for development purposes.
-    // In production, you would verify bcrypt hash against a password column.
+    if (user.password !== password) {
+      return NextResponse.json({ message: 'Email atau password salah' }, { status: 401 });
+    }
 
     const payload = {
       sub: user.id,

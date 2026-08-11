@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Loader2, Plus, Trash2, Download } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Plus, Trash2, Download, Search, Check, ChevronsUpDown } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import api from '@/lib/api';
@@ -12,9 +12,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function CreateRfcPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [loadingRequirements, setLoadingRequirements] = useState(false);
   
@@ -32,6 +35,14 @@ export default function CreateRfcPage() {
     notes: '',
   });
   
+  const [projectSearch, setProjectSearch] = useState('');
+  const [projectPopoverOpen, setProjectPopoverOpen] = useState(false);
+  const [approverSearch, setApproverSearch] = useState('');
+  const [approverPopoverOpen, setApproverPopoverOpen] = useState(false);
+
+  const [materialSearchState, setMaterialSearchState] = useState<Record<number, string>>({});
+  const [materialPopoverOpenState, setMaterialPopoverOpenState] = useState<Record<number, boolean>>({});
+
   const [requestDocument, setRequestDocument] = useState<File | null>(null);
 
   const [items, setItems] = useState<any[]>([
@@ -49,6 +60,12 @@ export default function CreateRfcPage() {
     const today = new Date().toISOString().split('T')[0];
     setFormData(prev => ({ ...prev, requestDate: today }));
   }, []);
+
+  useEffect(() => {
+    if (user?.id) {
+      setFormData(prev => ({ ...prev, requestorId: user.id }));
+    }
+  }, [user]);
 
   const handleAddItem = () => {
     setItems([...items, { materialId: '', requestQty: 1, notes: '' }]);
@@ -154,33 +171,61 @@ export default function CreateRfcPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="projectId">Project</Label>
-                <select 
-                  id="projectId" 
-                  required 
-                  className={selectClass}
-                  value={formData.projectId}
-                  onChange={(e) => setFormData({...formData, projectId: e.target.value})}
-                >
-                  <option value="">Select a project...</option>
-                  {projects.map(p => (
-                    <option key={p.id} value={p.id}>{p.projectName}</option>
-                  ))}
-                </select>
+                <Popover open={projectPopoverOpen} onOpenChange={setProjectPopoverOpen}>
+                  <PopoverTrigger
+                      className="flex min-h-10 h-auto w-full max-w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <span className="text-left flex-1 pr-2 break-words whitespace-normal">
+                      {formData.projectId
+                        ? projects.find((p) => p.id === formData.projectId)?.projectName
+                        : "Select a project..."}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </PopoverTrigger>
+                  <PopoverContent className="w-(--anchor-width) min-w-[300px] p-0" align="start">
+                    <div className="flex items-center border-b px-3">
+                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                      <Input
+                        placeholder="Search project..."
+                        className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0"
+                        value={projectSearch}
+                        onChange={(e) => setProjectSearch(e.target.value)}
+                      />
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto p-1">
+                      {projects.filter(p => p.projectName.toLowerCase().includes(projectSearch.toLowerCase())).length === 0 ? (
+                        <div className="py-6 text-center text-sm text-muted-foreground">No project found.</div>
+                      ) : (
+                        projects.filter(p => p.projectName.toLowerCase().includes(projectSearch.toLowerCase())).map(p => (
+                          <div
+                            key={p.id}
+                            className={`relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground ${formData.projectId === p.id ? 'bg-accent text-accent-foreground' : ''}`}
+                            onClick={() => {
+                              setFormData({...formData, projectId: p.id});
+                              setProjectPopoverOpen(false);
+                            }}
+                          >
+                            {formData.projectId === p.id && (
+                              <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                                <Check className="h-4 w-4" />
+                              </span>
+                            )}
+                            {p.projectName}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="requestorId">Requestor (PIC)</Label>
-                <select 
+                <Input 
                   id="requestorId" 
-                  required 
-                  className={selectClass}
-                  value={formData.requestorId}
-                  onChange={(e) => setFormData({...formData, requestorId: e.target.value})}
-                >
-                  <option value="">Select a requestor...</option>
-                  {users.map(u => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  ))}
-                </select>
+                  value={user?.name || ''} 
+                  disabled 
+                  className="bg-muted/50"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="requestDate">Request Date</Label>
@@ -191,21 +236,55 @@ export default function CreateRfcPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="approvalDestination">Approval Destination</Label>
-                <select 
-                  id="approvalDestination" 
-                  required 
-                  className={selectClass}
-                  value={formData.approvalDestination}
-                  onChange={(e) => setFormData({...formData, approvalDestination: e.target.value})}
-                >
-                  <option value="">Select approver...</option>
-                  {users
-                    .filter(u => ['SITE_MANAGER', 'FINANCE'].includes(u.role))
-                    .map(u => (
-                      <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                    ))
-                  }
-                </select>
+                <Popover open={approverPopoverOpen} onOpenChange={setApproverPopoverOpen}>
+                  <PopoverTrigger
+                      className="flex min-h-10 h-auto w-full max-w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <span className="text-left flex-1 pr-2 break-words whitespace-normal">
+                      {formData.approvalDestination
+                        ? (() => {
+                            const u = users.find((u) => u.id === formData.approvalDestination);
+                            return u ? `${u.name} (${u.role})` : "Select approver...";
+                          })()
+                        : "Select approver..."}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </PopoverTrigger>
+                  <PopoverContent className="w-(--anchor-width) min-w-[300px] p-0" align="start">
+                    <div className="flex items-center border-b px-3">
+                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                      <Input
+                        placeholder="Search approver..."
+                        className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0"
+                        value={approverSearch}
+                        onChange={(e) => setApproverSearch(e.target.value)}
+                      />
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto p-1">
+                      {users.filter(u => ['PROCUREMENT', 'ADMIN', 'OWNER'].includes(u.role) && u.name.toLowerCase().includes(approverSearch.toLowerCase())).length === 0 ? (
+                        <div className="py-6 text-center text-sm text-muted-foreground">No approver found.</div>
+                      ) : (
+                        users.filter(u => ['PROCUREMENT', 'ADMIN', 'OWNER'].includes(u.role) && u.name.toLowerCase().includes(approverSearch.toLowerCase())).map(u => (
+                          <div
+                            key={u.id}
+                            className={`relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground ${formData.approvalDestination === u.id ? 'bg-accent text-accent-foreground' : ''}`}
+                            onClick={() => {
+                              setFormData({...formData, approvalDestination: u.id});
+                              setApproverPopoverOpen(false);
+                            }}
+                          >
+                            {formData.approvalDestination === u.id && (
+                              <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                                <Check className="h-4 w-4" />
+                              </span>
+                            )}
+                            {u.name} ({u.role})
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
             
@@ -279,21 +358,66 @@ export default function CreateRfcPage() {
               const uom = selectedMaterial ? selectedMaterial.unit : '-';
               
               return (
-                <div key={index} className="flex items-start gap-4 p-4 border rounded-lg bg-muted/20">
+                <div key={index} className="flex items-start gap-4">
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-4 flex-1">
                     <div className="space-y-2 md:col-span-4">
                       <Label>Material</Label>
-                      <select 
-                        required 
-                        className={selectClass}
-                        value={item.materialId}
-                        onChange={(e) => handleItemChange(index, 'materialId', e.target.value)}
+                      <Popover 
+                        open={materialPopoverOpenState[index] || false} 
+                        onOpenChange={(open) => setMaterialPopoverOpenState(prev => ({...prev, [index]: open}))}
                       >
-                        <option value="">Select material...</option>
-                        {materials.map(m => (
-                          <option key={m.id} value={m.id}>[{m.materialCode}] - {m.materialName}</option>
-                        ))}
-                      </select>
+                        <PopoverTrigger
+                            className="flex min-h-10 h-auto w-full max-w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
+                          >
+                            <span className="text-left flex-1 pr-2 break-words whitespace-normal">
+                            {item.materialId
+                              ? (() => {
+                                  const m = materials.find((m) => m.id === item.materialId);
+                                  return m ? `[${m.materialCode}] - ${m.materialName}` : "Select material...";
+                                })()
+                              : "Select material..."}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[600px] max-w-[90vw] p-0" align="start">
+                          <div className="flex items-center border-b px-3">
+                            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                            <Input
+                              placeholder="Search material code or name..."
+                              className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0"
+                              value={materialSearchState[index] || ''}
+                              onChange={(e) => setMaterialSearchState(prev => ({...prev, [index]: e.target.value}))}
+                            />
+                          </div>
+                          <div className="max-h-[300px] overflow-y-auto p-1">
+                            {(() => {
+                              const srch = (materialSearchState[index] || '').toLowerCase();
+                              const filtered = materials.filter(m => 
+                                m.materialCode.toLowerCase().includes(srch) || 
+                                m.materialName.toLowerCase().includes(srch)
+                              );
+                              if (filtered.length === 0) return <div className="py-6 text-center text-sm text-muted-foreground">No material found.</div>;
+                              return filtered.map(m => (
+                                <div
+                                  key={m.id}
+                                  className={`relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground ${item.materialId === m.id ? 'bg-accent text-accent-foreground' : ''}`}
+                                  onClick={() => {
+                                    handleItemChange(index, 'materialId', m.id);
+                                    setMaterialPopoverOpenState(prev => ({...prev, [index]: false}));
+                                  }}
+                                >
+                                  {item.materialId === m.id && (
+                                    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                                      <Check className="h-4 w-4" />
+                                    </span>
+                                  )}
+                                  [{m.materialCode}] - {m.materialName}
+                                </div>
+                              ));
+                            })()}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                     
                     <div className="space-y-2 md:col-span-1">

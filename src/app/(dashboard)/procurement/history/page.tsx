@@ -14,12 +14,16 @@ import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DataTablePagination } from '@/components/shared/DataTablePagination';
 
 export default function ProcurementHistoryPage() {
  const { user } = useAuth();
  const [pos, setPos] = useState<any[]>([]);
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
+ 
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
  
  const [formData, setFormData] = useState<any>({
  poNumber: '',
@@ -44,7 +48,7 @@ export default function ProcurementHistoryPage() {
  const fetchPOs = async () => {
   setLoading(true);
   try {
-  const { data } = await api.get('/api/procurement', { params: { search, type: 'history' } });
+  const { data } = await api.get('/api/procurement', { params: { search, type: 'history', limit: 5000 } });
   setPos(data.data || []);
  } catch (e) { 
  console.error(e); 
@@ -55,6 +59,7 @@ export default function ProcurementHistoryPage() {
 
  useEffect(() => {
  fetchPOs();
+ setPage(1);
  }, [search]);
 
   const openViewDialog = async (po: any) => {
@@ -118,6 +123,7 @@ export default function ProcurementHistoryPage() {
  <p className="text-muted-foreground">Loading purchase orders...</p>
  </div>
  ) : pos.length > 0 ? (
+ <>
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
@@ -129,7 +135,7 @@ export default function ProcurementHistoryPage() {
  </TableRow>
  </TableHeader>
  <TableBody>
- {pos.map((po) => (
+ {pos.slice((page - 1) * pageSize, page * pageSize).map((po) => (
  <TableRow key={po.id} className="hover:bg-muted/30">
  <TableCell className="font-medium text-primary">{po.poNumber}</TableCell>
  <TableCell>{po.vendor}</TableCell>
@@ -148,6 +154,14 @@ export default function ProcurementHistoryPage() {
  ))}
  </TableBody>
  </Table>
+ <DataTablePagination 
+    totalItems={pos.length} 
+    pageSize={pageSize} 
+    currentPage={page} 
+    onPageChange={setPage} 
+    onPageSizeChange={setPageSize} 
+ />
+ </>
  ) : (
  <div className="text-center py-16 bg-card border rounded-xl ">
  <ShoppingCart className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />

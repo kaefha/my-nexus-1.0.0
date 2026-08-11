@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import SignatureCanvas from 'react-signature-canvas';
 import { useAuth } from '@/hooks/useAuth';
+import { DataTablePagination } from '@/components/shared/DataTablePagination';
 
 export default function RfcApprovalPage() {
  const { user } = useAuth();
@@ -22,20 +23,28 @@ export default function RfcApprovalPage() {
  const [processingId, setProcessingId] = useState<string | null>(null);
  const [approvingRfc, setApprovingRfc] = useState<any | null>(null);
  const [signedDocument, setSignedDocument] = useState<File | null>(null);
+ 
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
 
  useEffect(() => {
  fetchPendingRfcs();
+ setPage(1);
  }, [search]);
 
  const fetchPendingRfcs = async () => {
  try {
  const { data } = await api.get('/api/rfc', { params: { search, limit: 50 } });
-  // Filter for RFCs that need approval based on user role
+  // Filter for RFCs that need approval based on user role and strict destination
   const pending = data.data.filter((r: any) => {
-    if (r.status === 'WAITING_SITE_APPROVAL' && user?.role === 'SITE_MANAGER') return true;
-    if (r.status === 'WAITING_FINANCE_APPROVAL' && user?.role === 'FINANCE') return true;
-    // Admins can see all pending approvals
-    if ((user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (r.status === 'WAITING_SITE_APPROVAL' || r.status === 'WAITING_FINANCE_APPROVAL')) return true;
+    // 1. Strict user-targeted check: If assigned to a specific user, ONLY that user can see it
+    if (r.approvalDestination && r.approvalDestination !== user?.id) {
+      return false;
+    }
+
+    // 2. Role-based fallback
+    if (r.status === 'WAITING_APPROVAL' && (user?.role === 'PROCUREMENT' || user?.role === 'OWNER' || user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN')) return true;
+    
     return false;
   });
  setRfcs(pending);
@@ -73,9 +82,6 @@ export default function RfcApprovalPage() {
       }
 
       let nextStatus = 'APPROVED';
-      if (approvingRfc.status === 'WAITING_SITE_APPROVAL') {
-        nextStatus = 'WAITING_FINANCE_APPROVAL';
-      }
 
       await api.patch(`/api/rfc/${approvingRfc.id}`, { 
         status: nextStatus, 
@@ -134,6 +140,7 @@ export default function RfcApprovalPage() {
  <p className="text-muted-foreground">Loading approval queue...</p>
  </div>
  ) : rfcs.length > 0 ? (
+ <>
  <Table className="whitespace-nowrap">
  <TableHeader className="bg-muted/50">
  <TableRow>
@@ -146,20 +153,23 @@ export default function RfcApprovalPage() {
  </TableRow>
  </TableHeader>
  <TableBody>
- {rfcs.map((rfc) => (
+ {rfcs.slice((page - 1) * pageSize, page * pageSize).map((rfc) => (
  <TableRow key={rfc.id} className="hover:bg-muted/30">
  <TableCell className="font-medium text-primary">
  {rfc.rfcNumber}
  </TableCell>
- <TableCell className="whitespace-normal max-w-[300px]">
+ <TableCell className="whitespace-normal max-w-[250px]">
  <div className="font-medium">{rfc.project?.projectName}</div>
- <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+ <div className="flex items-start gap-1.5 text-xs text-muted-foreground mt-1">
  <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
  <span>{rfc.location}</span>
  </div>
  </TableCell>
  <TableCell>
- <span className="text-sm">{rfc.requestor?.name || 'Unknown'}</span>
+ <div className="text-sm font-medium">{rfc.requestor?.name || 'Unknown'}</div>
+ <div className="text-xs text-muted-foreground mt-0.5 border-t pt-1 border-muted/50 inline-block">
+  To: {rfc.approver?.name || 'Any Approver'}
+ </div>
  </TableCell>
  <TableCell>
  <span className="text-sm">{formatDate(rfc.createdAt)}</span>
@@ -180,6 +190,9 @@ export default function RfcApprovalPage() {
         <FileText className="w-4 h-4" /> View Doc
       </a>
     )}
+    
+    {/* Activity Log Dropdown/Modal trigger could be added here if we had detailed history. For now, showing 'To' approver is the log. */}
+    
   <Button 
   size="sm" 
   variant="outline" 
@@ -208,6 +221,14 @@ export default function RfcApprovalPage() {
  ))}
  </TableBody>
  </Table>
+ <DataTablePagination 
+    totalItems={rfcs.length} 
+    pageSize={pageSize} 
+    currentPage={page} 
+    onPageChange={setPage} 
+    onPageSizeChange={setPageSize} 
+ />
+ </>
  ) : (
  <div className="text-center py-16 bg-card border rounded-xl">
  <CheckCircle className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-30" />

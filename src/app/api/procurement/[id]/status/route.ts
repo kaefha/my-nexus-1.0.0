@@ -10,7 +10,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { status, approverId } = body;
+    const { status, approverId, signedDocumentUrl } = body;
 
     if (!status) {
       return NextResponse.json({ message: 'Status is required' }, { status: 400 });
@@ -22,12 +22,27 @@ export async function PATCH(
       return NextResponse.json({ message: 'Purchase Order not found' }, { status: 404 });
     }
 
-    // Update PO status
+    // Build update query dynamically
+    let queryStr = 'UPDATE purchase_orders SET status = $1, updated_at = NOW()';
+    const params: any[] = [status];
+    let paramIndex = 2;
+
     if (approverId) {
-      await pool.query('UPDATE purchase_orders SET status = $1, approver_id = $2, updated_at = NOW() WHERE id = $3', [status, approverId, id]);
-    } else {
-      await pool.query('UPDATE purchase_orders SET status = $1, updated_at = NOW() WHERE id = $2', [status, id]);
+      queryStr += `, approver_id = $${paramIndex}`;
+      params.push(approverId);
+      paramIndex++;
     }
+
+    if (signedDocumentUrl) {
+      queryStr += `, signed_document_url = $${paramIndex}`;
+      params.push(signedDocumentUrl);
+      paramIndex++;
+    }
+
+    queryStr += ` WHERE id = $${paramIndex}`;
+    params.push(id);
+
+    await pool.query(queryStr, params);
 
     return NextResponse.json({ message: 'Status updated successfully' }, { status: 200 });
   } catch (error: any) {

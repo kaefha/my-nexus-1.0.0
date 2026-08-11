@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import api from '@/lib/api';
 import { formatDate } from '@/lib/utils';
+import { DataTablePagination } from '@/components/shared/DataTablePagination';
 
 interface Stock {
   id: string;
@@ -26,6 +27,8 @@ export default function StockMonitoringPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedWarehouse, setSelectedWarehouse] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     fetchWarehouses();
@@ -34,6 +37,7 @@ export default function StockMonitoringPage() {
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       fetchStocks();
+      setPage(1);
     }, 500);
 
     return () => clearTimeout(delayDebounceFn);
@@ -52,7 +56,7 @@ export default function StockMonitoringPage() {
     setLoading(true);
     try {
       const warehouseQuery = selectedWarehouse !== 'ALL' ? `&warehouseId=${selectedWarehouse}` : '';
-      const { data } = await api.get(`/api/inventory/stocks?search=${search}${warehouseQuery}`);
+      const { data } = await api.get(`/api/inventory/stocks?search=${search}${warehouseQuery}&limit=5000`);
       setStocks(data.data || []);
     } catch (error) {
       console.error('Failed to fetch stocks', error);
@@ -83,7 +87,7 @@ export default function StockMonitoringPage() {
           />
         </div>
         <div className="w-full sm:w-[250px]">
-          <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
+          <Select value={selectedWarehouse} onValueChange={(val) => setSelectedWarehouse(val || "")}>
             <SelectTrigger>
               <SelectValue placeholder="Filter by Warehouse" />
             </SelectTrigger>
@@ -117,7 +121,7 @@ export default function StockMonitoringPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {stocks.map((stock, i) => (
+                {stocks.slice((page - 1) * pageSize, page * pageSize).map((stock, i) => (
                   <TableRow key={`${stock.id}-${i}`}>
                     <TableCell className="font-medium">{stock.warehouseName}</TableCell>
                     <TableCell>{stock.materialCode || '-'}</TableCell>
@@ -133,6 +137,13 @@ export default function StockMonitoringPage() {
                 ))}
               </TableBody>
             </Table>
+            <DataTablePagination 
+              totalItems={stocks.length} 
+              pageSize={pageSize} 
+              currentPage={page} 
+              onPageChange={setPage} 
+              onPageSizeChange={setPageSize} 
+            />
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">

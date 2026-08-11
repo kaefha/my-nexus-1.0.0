@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const res = await pool.query(`SELECT id, name, email, role, is_active as isActive FROM users ORDER BY name ASC`);
+    const res = await pool.query(`SELECT id, name, email, role, is_active as "isActive" FROM users ORDER BY name ASC`);
     return NextResponse.json({ data: res.rows }, { status: 200 });
   } catch (error: any) {
     console.error('Error fetching users:', error);
@@ -25,8 +25,8 @@ export async function POST(request: Request) {
     const id = generateId();
 
     const res = await pool.query(`
-      INSERT INTO users (id, name, email, role, is_active)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO users (id, name, email, role, is_active, password)
+      VALUES ($1, $2, $3, $4, $5, '123')
       RETURNING *
     `, [id, name, email, role || 'USER', isActive !== undefined ? isActive : true]);
 

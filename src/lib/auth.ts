@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 const JWT_SECRET = process.env.JWT_SECRET || 'nims-jwt-secret-change-in-production-2026';
 
 export const signToken = (payload: any) => {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: process.env.JWT_EXPIRATION || '7d' });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: (process.env.JWT_EXPIRATION || '7d') as any });
 };
 
 export const verifyToken = (token: string) => {

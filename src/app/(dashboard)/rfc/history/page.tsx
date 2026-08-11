@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
+import { DataTablePagination } from '@/components/shared/DataTablePagination';
 
 export default function RfcHistoryPage() {
  const [rfcs, setRfcs] = useState<any[]>([]);
@@ -21,9 +22,13 @@ export default function RfcHistoryPage() {
  const [startDate, setStartDate] = useState('');
  const [endDate, setEndDate] = useState('');
  const [sort, setSort] = useState('desc');
+ 
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
 
  useEffect(() => {
    fetchRfcs();
+   setPage(1);
  }, [search, startDate, endDate, sort]);
 
  const fetchRfcs = async () => {
@@ -73,7 +78,7 @@ export default function RfcHistoryPage() {
               />
             </div>
 
-            <Select value={sort} onValueChange={setSort}>
+            <Select value={sort} onValueChange={(val) => setSort(val || "")}>
               <SelectTrigger className="w-[160px] h-9 bg-background">
                 <SelectValue>
                   Sort by: {sort === 'desc' ? 'Newest' : 'Oldest'}
@@ -95,6 +100,7 @@ export default function RfcHistoryPage() {
  <p className="text-muted-foreground">Loading RFC history...</p>
  </div>
  ) : rfcs.length > 0 ? (
+ <>
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
@@ -108,7 +114,7 @@ export default function RfcHistoryPage() {
  </TableRow>
  </TableHeader>
  <TableBody>
- {rfcs.map((rfc) => (
+ {rfcs.slice((page - 1) * pageSize, page * pageSize).map((rfc) => (
  <TableRow key={rfc.id} className="hover:bg-muted/30">
  <TableCell className="font-medium text-primary">
  {rfc.rfcNumber}
@@ -166,6 +172,14 @@ export default function RfcHistoryPage() {
  ))}
  </TableBody>
  </Table>
+ <DataTablePagination 
+    totalItems={rfcs.length} 
+    pageSize={pageSize} 
+    currentPage={page} 
+    onPageChange={setPage} 
+    onPageSizeChange={setPageSize} 
+ />
+ </>
  ) : (
  <div className="text-center py-16 bg-card border rounded-xl ">
  <History className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />

@@ -8,15 +8,49 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = (searchParams.get('search') || '').toLowerCase();
     
-    let queryStr = 'SELECT * FROM warehouses';
+    const type = searchParams.get('type');
+    const status = searchParams.get('status');
+    const sort = searchParams.get('sort') || 'name-asc';
+    
+    let queryStr = `
+      SELECT 
+        w.*,
+        COUNT(DISTINCT s.material_id) as total_materials,
+        COALESCE(SUM(s.quantity), 0) as total_stock
+      FROM warehouses w
+      LEFT JOIN inventory_stocks s ON w.id = s.warehouse_id
+    `;
     const queryParams: any[] = [];
+    const conditions: string[] = [];
 
     if (search) {
-      queryStr += ` WHERE LOWER(code) LIKE $1 OR LOWER(name) LIKE $1 OR LOWER(location) LIKE $1`;
+      conditions.push(`(LOWER(w.code) LIKE $${queryParams.length + 1} OR LOWER(w.name) LIKE $${queryParams.length + 1} OR LOWER(w.location) LIKE $${queryParams.length + 1})`);
       queryParams.push(`%${search}%`);
     }
+    if (type && type !== 'ALL') {
+      conditions.push(`w.type = $${queryParams.length + 1}`);
+      queryParams.push(type);
+    }
+    if (status && status !== 'ALL') {
+      conditions.push(`w.status = $${queryParams.length + 1}`);
+      queryParams.push(status);
+    }
 
-    queryStr += ' ORDER BY name ASC';
+    if (conditions.length > 0) {
+      queryStr += ` WHERE ${conditions.join(' AND ')}`;
+    }
+
+    queryStr += ` GROUP BY w.id, w.code, w.name, w.location, w.coordinates, w.evidence, w.type, w.capacity, w.status, w.created_at, w.updated_at`;
+
+    if (sort === 'name-desc') {
+      queryStr += ' ORDER BY w.name DESC';
+    } else if (sort === 'code-asc') {
+      queryStr += ' ORDER BY w.code ASC';
+    } else if (sort === 'code-desc') {
+      queryStr += ' ORDER BY w.code DESC';
+    } else {
+      queryStr += ' ORDER BY w.name ASC';
+    }
     
     const res = await pool.query(queryStr, queryParams);
     
@@ -30,6 +64,8 @@ export async function GET(request: Request) {
       type: row.type,
       capacity: row.capacity,
       status: row.status,
+      totalMaterials: parseInt(row.total_materials, 10) || 0,
+      totalStock: parseInt(row.total_stock, 10) || 0,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     }));

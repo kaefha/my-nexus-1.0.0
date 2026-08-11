@@ -40,12 +40,19 @@ import {
 } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
+import { DataTablePagination } from '@/components/shared/DataTablePagination';
 
 
 export default function ProjectsPage() {
  const [projects, setProjects] = useState<any[]>([]);
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
+ const [filterStartDate, setFilterStartDate] = useState('');
+ const [filterEndDate, setFilterEndDate] = useState('');
+ const [sortBy, setSortBy] = useState('newest');
+ 
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
  
  // Dialog State
  const [isOpen, setIsOpen] = useState(false);
@@ -77,11 +84,12 @@ export default function ProjectsPage() {
 
  useEffect(() => {
  fetchProjects();
- }, [search]);
+ setPage(1); // Reset page on filter change
+ }, [search, filterStartDate, filterEndDate, sortBy]);
 
  const fetchProjects = async () => {
  try {
- const { data } = await api.get('/api/projects', { params: { search, limit: 50 } });
+ const { data } = await api.get('/api/projects', { params: { search, limit: 5000, startDate: filterStartDate, endDate: filterEndDate, sort: sortBy } });
  setProjects(data.data || []);
  } catch (error) {
  console.error(error);
@@ -257,7 +265,7 @@ export default function ProjectsPage() {
  </div>
  <div className="space-y-2">
  <Label htmlFor="projectType">Project Type</Label>
- <Select value={formData.projectType} onValueChange={(val) => setFormData({ ...formData, projectType: val })}>
+ <Select value={formData.projectType} onValueChange={(val) => setFormData({ ...formData, projectType: val || "" })}>
    <SelectTrigger id="projectType" className="w-full">
      <SelectValue placeholder="Select type" />
    </SelectTrigger>
@@ -274,7 +282,7 @@ export default function ProjectsPage() {
  {editId && (
  <div className="space-y-2">
  <Label htmlFor="status">Status</Label>
- <Select value={formData.status} onValueChange={(val) => setFormData({ ...formData, status: val })}>
+ <Select value={formData.status} onValueChange={(val) => setFormData({ ...formData, status: val || "" })}>
    <SelectTrigger id="status" className="w-full">
      {formData.status ? (
        <span>
@@ -328,20 +336,56 @@ export default function ProjectsPage() {
  </Dialog>
 
       {/* Search and Action */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between animate-fade-in" style={{ animationDelay: '100ms' }}>
-        <div className="relative w-full max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search projects..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+      <div className="flex flex-col gap-4 animate-fade-in" style={{ animationDelay: '100ms' }}>
+        <div className="flex justify-end items-center">
+          <Button className="gap-2 w-full sm:w-auto" onClick={openCreateDialog}>
+            <Plus className="w-4 h-4" /> New Project
+          </Button>
         </div>
-        <Button className="gap-2 w-full sm:w-auto" onClick={openCreateDialog}>
-          <Plus className="w-4 h-4" /> New Project
-        </Button>
+
+        <div className="flex flex-wrap gap-4 items-end bg-card p-4 rounded-xl border border-border">
+          <div className="flex-1 min-w-[200px]">
+            <Label className="text-xs mb-1.5 block text-muted-foreground">Search</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Search projects..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 bg-background"
+              />
+            </div>
+          </div>
+          <div className="w-[160px]">
+            <Label className="text-xs mb-1.5 block text-muted-foreground">Start Date From</Label>
+            <DatePicker
+              value={filterStartDate}
+              onChange={(value) => setFilterStartDate(value)}
+            />
+          </div>
+          <div className="w-[160px]">
+            <Label className="text-xs mb-1.5 block text-muted-foreground">Start Date To</Label>
+            <DatePicker
+              value={filterEndDate}
+              onChange={(value) => setFilterEndDate(value)}
+            />
+          </div>
+          <div className="w-[180px]">
+            <Label className="text-xs mb-1.5 block text-muted-foreground">Sort By</Label>
+            <Select value={sortBy} onValueChange={(val) => setSortBy(val || "")}>
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Sort By" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="oldest">Oldest First</SelectItem>
+                <SelectItem value="name-asc">Name (A-Z)</SelectItem>
+                <SelectItem value="name-desc">Name (Z-A)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
  <div className="animate-fade-in" style={{ animationDelay: '200ms' }}>
@@ -351,6 +395,7 @@ export default function ProjectsPage() {
  <p className="text-muted-foreground">Loading projects...</p>
  </div>
  ) : projects.length > 0 ? (
+ <>
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
@@ -364,7 +409,7 @@ export default function ProjectsPage() {
  </TableRow>
  </TableHeader>
  <TableBody>
- {projects.map((project) => (
+ {projects.slice((page - 1) * pageSize, page * pageSize).map((project) => (
  <TableRow key={project.id} className="hover:bg-muted/30 group">
  <TableCell className="font-medium text-primary">
  <div className="flex flex-col">
@@ -442,6 +487,14 @@ export default function ProjectsPage() {
  ))}
  </TableBody>
  </Table>
+ <DataTablePagination 
+    totalItems={projects.length} 
+    pageSize={pageSize} 
+    currentPage={page} 
+    onPageChange={setPage} 
+    onPageSizeChange={setPageSize} 
+ />
+ </>
  ) : (
  <div className="text-center py-16 bg-card border rounded-xl ">
  <FolderKanban className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />

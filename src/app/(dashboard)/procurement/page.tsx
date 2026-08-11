@@ -7,6 +7,8 @@ import StatusBadge from '@/components/shared/StatusBadge';
 import { formatDate } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +17,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DataTablePagination } from '@/components/shared/DataTablePagination';
 
 interface POItem {
   id?: string;
@@ -22,38 +25,18 @@ interface POItem {
   quantity: number;
 }
 
-export default function ProcurementPage() {
+ export default function ProcurementPage() {
  const { user } = useAuth();
+ const router = useRouter();
  const [pos, setPos] = useState<any[]>([]);
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
  
- const [formData, setFormData] = useState({
-   poNumber: '',
-   vendor: '',
-   rfcId: '',
-   expectedDate: '',
-   notes: '',
-   transporter: '',
-   driverName: '',
-   vehicleNumber: '',
-   deliverTo: '',
-   items: [] as POItem[]
- });
- const [approvedRfcs, setApprovedRfcs] = useState<any[]>([]);
- const [isFetchingRfc, setIsFetchingRfc] = useState(false);
- const [vendors, setVendors] = useState<any[]>([]);
- const [isEditMode, setIsEditMode] = useState(false);
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
 
- // View PO state
- const [isOpen, setIsOpen] = useState(false);
- const [isSubmitting, setIsSubmitting] = useState(false);
- const [isViewOpen, setIsViewOpen] = useState(false);
- const [selectedPo, setSelectedPo] = useState<any>(null);
- const [isLoadingPo, setIsLoadingPo] = useState(false);
- 
- // Delete PO state
- const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  // Delete PO state
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
  const [poToDelete, setPoToDelete] = useState<string | null>(null);
 
  // Upload Signed Doc state
@@ -65,7 +48,7 @@ export default function ProcurementPage() {
  const fetchPOs = async () => {
   setLoading(true);
   try {
-  const { data } = await api.get('/api/procurement', { params: { search, type: 'active' } });
+  const { data } = await api.get('/api/procurement', { params: { search, type: 'active', limit: 5000 } });
   setPos(data.data || []);
  } catch (e) { 
  console.error(e); 
@@ -74,92 +57,13 @@ export default function ProcurementPage() {
  }
  };
 
- const fetchApprovedRfcs = async () => {
-   try {
-     const { data } = await api.get('/api/rfc?status=APPROVED');
-     setApprovedRfcs(data.data || []);
-   } catch (e) {
-     console.error(e);
-   }
- };
-
- const fetchVendors = async () => {
-   try {
-     const { data } = await api.get('/api/vendors');
-     setVendors(data.data || []);
-   } catch (e) {
-     console.error(e);
-   }
- };
-
  useEffect(() => {
- fetchPOs();
- fetchApprovedRfcs();
- fetchVendors();
+   fetchPOs();
+   setPage(1);
  }, [search]);
 
- const handleRfcChange = async (rfcId: string) => {
-   setFormData({ ...formData, rfcId });
-   if (rfcId === 'none') {
-     setFormData(prev => ({ ...prev, rfcId: '', items: [] }));
-     return;
-   }
-   
-   setIsFetchingRfc(true);
-   try {
-     const { data } = await api.get(`/api/rfc/${rfcId}`);
-     if (data?.data?.items) {
-       const mappedItems = data.data.items.map((item: any) => ({
-         ...item,
-         quantity: item.requestQty
-       }));
-       setFormData(prev => ({ ...prev, rfcId, items: mappedItems }));
-     }
-   } catch (error) {
-     console.error('Failed to fetch RFC details', error);
-   } finally {
-     setIsFetchingRfc(false);
-   }
- };
-
-  const handleViewPO = async (id: string) => {
-    setIsViewOpen(true);
-    setIsLoadingPo(true);
-    setSelectedPo(null);
-    try {
-      const { data } = await api.get(`/api/procurement/${id}`);
-      setSelectedPo(data.data);
-    } catch (error) {
-      console.error('Error fetching PO details:', error);
-      toast.error('Failed to load PO details');
-    } finally {
-      setIsLoadingPo(false);
-    }
-  };
-
-  const handleEditPO = async (id: string) => {
-    setIsOpen(true);
-    setIsEditMode(true);
-    try {
-      const { data } = await api.get(`/api/procurement/${id}`);
-      const po = data.data;
-      setFormData({
-        poNumber: po.poNumber || '',
-        vendor: po.vendor || '',
-        rfcId: po.rfcId || '',
-        expectedDate: po.expectedDate ? new Date(po.expectedDate).toISOString().split('T')[0] : '',
-        notes: po.notes || '',
-        transporter: po.transporter || '',
-        driverName: po.driverName || '',
-        vehicleNumber: po.vehicleNumber || '',
-        deliverTo: po.deliverTo || '',
-        items: po.items || []
-      });
-    } catch (error) {
-      console.error('Error fetching PO details for edit:', error);
-      toast.error('Failed to load PO details');
-      setIsOpen(false);
-    }
+  const handleViewPO = (id: string) => {
+    router.push(`/procurement/${id}`);
   };
 
   const confirmDeletePO = (id: string) => {
@@ -167,6 +71,7 @@ export default function ProcurementPage() {
     setIsDeleteOpen(true);
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const handleDeletePO = async () => {
     if (!poToDelete) return;
     setIsSubmitting(true);
@@ -184,44 +89,7 @@ export default function ProcurementPage() {
     }
   };
 
-  const updatePOStatus = async (status: string) => {
-    if (!selectedPo) return;
-    try {
-      const payload: any = { status };
-      if ((status === 'APPROVED' || status === 'REJECTED') && user?.id) {
-        payload.approverId = user.id;
-      }
-      await api.patch(`/api/procurement/${selectedPo.id}/status`, payload);
-      toast.success(`PO status updated to ${status}`);
-      setSelectedPo({ ...selectedPo, status, approverName: user?.name, approverRole: user?.role });
-      fetchPOs();
-    } catch (error) {
-      console.error('Failed to update status', error);
-      toast.error('Failed to update PO status');
-    }
-  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      if (isEditMode && formData.id) {
-        await api.put(`/api/procurement/${formData.id}`, formData);
-        toast.success('PO updated successfully');
-      } else {
-        await api.post('/api/procurement', formData);
-        toast.success('PO created successfully');
-      }
-      setIsOpen(false);
-      setFormData({ poNumber: '', vendor: '', rfcId: '', expectedDate: '', notes: '', transporter: '', driverName: '', vehicleNumber: '', deliverTo: '', items: [] });
-      fetchPOs();
-    } catch (error) {
-      console.error('Error saving PO:', error);
-      toast.error(isEditMode ? 'Failed to update PO' : 'Failed to create PO');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
  return (
  <div className="space-y-6">
@@ -241,9 +109,11 @@ export default function ProcurementPage() {
  className="pl-9"
  />
         </div>
-        <Button onClick={() => { setIsOpen(true); setIsEditMode(false); setFormData({ poNumber: '', vendor: '', rfcId: '', expectedDate: '', notes: '', transporter: '', driverName: '', vehicleNumber: '', deliverTo: '', items: [] }); }} className="gap-2 ">
-          <Plus className="w-4 h-4" /> New PO
-        </Button>
+         <Link href="/procurement/create">
+           <Button className="gap-2 ">
+             <Plus className="w-4 h-4" /> New PO
+           </Button>
+         </Link>
       </div>
 
  <div className="animate-fade-in" style={{ animationDelay: '200ms' }}>
@@ -253,6 +123,7 @@ export default function ProcurementPage() {
  <p className="text-muted-foreground">Loading purchase orders...</p>
  </div>
  ) : pos.length > 0 ? (
+ <>
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
@@ -264,7 +135,7 @@ export default function ProcurementPage() {
  </TableRow>
  </TableHeader>
  <TableBody>
- {pos.map((po) => (
+ {pos.slice((page - 1) * pageSize, page * pageSize).map((po) => (
  <TableRow key={po.id} className="hover:bg-muted/30">
  <TableCell className="font-medium text-primary">{po.poNumber}</TableCell>
  <TableCell>{po.vendor}</TableCell>
@@ -296,9 +167,9 @@ export default function ProcurementPage() {
             <Upload className="w-4 h-4 mr-2" /> Upload Signed Doc
           </DropdownMenuItem>
         )}
-       <DropdownMenuItem onClick={() => handleEditPO(po.id)}>
-         <Pencil className="w-4 h-4 mr-2" /> Edit
-       </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push(`/procurement/create?editId=${po.id}`)}>
+          <Pencil className="w-4 h-4 mr-2" /> Edit
+        </DropdownMenuItem>
        <DropdownMenuItem onClick={() => confirmDeletePO(po.id)} className="text-destructive">
          <Trash2 className="w-4 h-4 mr-2" /> Delete
        </DropdownMenuItem>
@@ -309,278 +180,28 @@ export default function ProcurementPage() {
  ))}
  </TableBody>
  </Table>
+ <DataTablePagination 
+    totalItems={pos.length} 
+    pageSize={pageSize} 
+    currentPage={page} 
+    onPageChange={setPage} 
+    onPageSizeChange={setPageSize} 
+ />
+ </>
  ) : (
  <div className="text-center py-16 bg-card border rounded-xl ">
  <ShoppingCart className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
  <p className="text-muted-foreground">No purchase orders found</p>
- <Button variant="link" onClick={() => setIsOpen(true)} className="mt-2">
- Create your first PO
- </Button>
+  <Link href="/procurement/create">
+    <Button variant="link" className="mt-2">
+    Create your first PO
+    </Button>
+  </Link>
  </div>
  )}
  </div>
 
- <Dialog open={isOpen} onOpenChange={setIsOpen}>
- <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
- <form onSubmit={handleSubmit}>
- <DialogHeader>
- <DialogTitle>{isEditMode ? 'Edit Purchase Order' : 'New Purchase Order'}</DialogTitle>
- <DialogDescription>{isEditMode ? 'Update the details of this purchase order.' : 'Create a new purchase order for materials.'}</DialogDescription>
- </DialogHeader>
- <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-  <div className="space-y-4">
-    <div className="grid gap-2">
-    <Label htmlFor="poNumber">PO Number *</Label>
-    <Input 
-    id="poNumber" 
-    placeholder="e.g. PO-2026-001" 
-    value={formData.poNumber}
-    onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
-    required 
-    />
-    </div>
-    <div className="grid gap-2">
-      <Label htmlFor="rfcRef">Reference RFC Number</Label>
-      <Select value={formData.rfcId || 'none'} onValueChange={handleRfcChange} disabled={isFetchingRfc}>
-        <SelectTrigger id="rfcRef" className="w-full">
-       <SelectValue placeholder="Select an approved RFC (Optional)" />
-     </SelectTrigger>
-     <SelectContent>
-       <SelectItem value="none">None (Manual PO)</SelectItem>
-        {approvedRfcs.map(rfc => (
-          <SelectItem key={rfc.id} value={rfc.id}>{rfc.rfcNumber}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-    </div>
-    <div className="grid gap-2">
-     <Label htmlFor="vendor">Vendor Name *</Label>
-     <Select value={formData.vendor} onValueChange={(val) => setFormData({...formData, vendor: val})} required>
-       <SelectTrigger id="vendor" className="w-full">
-         <SelectValue placeholder="Select a vendor" />
-       </SelectTrigger>
-       <SelectContent>
-         {vendors.map(v => (
-           <SelectItem key={v.id} value={v.name}>{v.name}</SelectItem>
-         ))}
-       </SelectContent>
-     </Select>
-    </div>
-    <div className="grid gap-2">
-    <Label htmlFor="expectedDate">Expected Date</Label>
-    <DatePicker 
-    value={formData.expectedDate}
-    onChange={(value) => setFormData({...formData, expectedDate: value})}
-    />
-    </div>
-    <div className="grid gap-2">
-    <Label htmlFor="notes">Notes</Label>
-    <Input 
-    id="notes" 
-    placeholder="Optional notes" 
-    value={formData.notes}
-    onChange={(e) => setFormData({...formData, notes: e.target.value})}
-    />
-    </div>
-  </div>
 
-  <div className="space-y-4">
-    <div className="grid gap-2">
-    <Label htmlFor="transporter">Transporter / Ekspedisi</Label>
-    <Input 
-    id="transporter" 
-    placeholder="e.g. PT. Lintas Benua Ekspres" 
-    value={formData.transporter}
-    onChange={(e) => setFormData({...formData, transporter: e.target.value})}
-    />
-    </div>
-    <div className="grid gap-2">
-    <Label htmlFor="driverName">Driver Name</Label>
-    <Input 
-    id="driverName" 
-    placeholder="e.g. Budi Santoso" 
-    value={formData.driverName}
-    onChange={(e) => setFormData({...formData, driverName: e.target.value})}
-    />
-    </div>
-    <div className="grid gap-2">
-    <Label htmlFor="vehicleNumber">Truck / Vehicle Number</Label>
-    <Input 
-    id="vehicleNumber" 
-    placeholder="e.g. B 9012 CDE" 
-    value={formData.vehicleNumber}
-    onChange={(e) => setFormData({...formData, vehicleNumber: e.target.value})}
-    />
-    </div>
-    <div className="grid gap-2">
-    <Label htmlFor="deliverTo">Deliver To</Label>
-    <Input 
-    id="deliverTo" 
-    placeholder="e.g. Proyek Pembangunan Jalur Kereta Api Lintas Makassar - Parepare" 
-    value={formData.deliverTo}
-    onChange={(e) => setFormData({...formData, deliverTo: e.target.value})}
-    />
-    </div>
-    {formData.items?.length > 0 && (
-      <div className="grid gap-1 bg-muted/30 p-3 rounded-md border text-sm mt-2">
-        <span className="font-medium text-muted-foreground mb-1">Auto-filled Items from RFC:</span>
-        <div className="max-h-[200px] overflow-y-auto space-y-1">
-          {formData.items.map((item: any, idx: number) => (
-            <div key={idx} className="flex justify-between items-center bg-background px-2 py-1 rounded border">
-              <span className="truncate pr-2">{item.materialName}</span>
-              <span className="font-semibold whitespace-nowrap">{item.quantity} units</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    )}
-  </div>
- </div>
- <DialogFooter>
- <Button type="button" variant="outline" onClick={() => setIsOpen(false)} disabled={isSubmitting}>
- Cancel
- </Button>
- <Button type="submit" disabled={isSubmitting}>
- {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
- Save PO
- </Button>
- </DialogFooter>
- </form>
- </DialogContent>
- </Dialog>
-
-  {/* View PO Dialog */}
-  <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-    <DialogContent className="max-w-2xl">
-      <DialogHeader>
-        <DialogTitle>Purchase Order Details</DialogTitle>
-      </DialogHeader>
-      
-      {isLoadingPo ? (
-        <div className="py-12 flex justify-center">
-          <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        </div>
-      ) : selectedPo ? (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-muted-foreground mb-1">PO Number</p>
-              <p className="font-semibold">{selectedPo.poNumber}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground mb-1">Status</p>
-              <StatusBadge status={selectedPo.status} />
-            </div>
-            <div>
-              <p className="text-muted-foreground mb-1">Vendor</p>
-              <p className="font-medium">{selectedPo.vendor}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground mb-1">Expected Date</p>
-              <p>{selectedPo.expectedDate ? formatDate(selectedPo.expectedDate) : '-'}</p>
-            </div>
-            {selectedPo.transporter && (
-              <div className="col-span-2 md:col-span-1">
-                <p className="text-muted-foreground mb-1">Transporter / Ekspedisi</p>
-                <p className="font-medium">{selectedPo.transporter}</p>
-              </div>
-            )}
-            {selectedPo.driverName && (
-              <div className="col-span-2 md:col-span-1">
-                <p className="text-muted-foreground mb-1">Driver Name</p>
-                <p className="font-medium">{selectedPo.driverName}</p>
-              </div>
-            )}
-            {selectedPo.vehicleNumber && (
-              <div className="col-span-2 md:col-span-1">
-                <p className="text-muted-foreground mb-1">Vehicle Number</p>
-                <p className="font-medium">{selectedPo.vehicleNumber}</p>
-              </div>
-            )}
-            {selectedPo.deliverTo && (
-              <div className="col-span-2 md:col-span-1">
-                <p className="text-muted-foreground mb-1">Deliver To</p>
-                <p className="font-medium">{selectedPo.deliverTo}</p>
-              </div>
-            )}
-            {selectedPo.rfcId && (
-              <div className="col-span-2">
-                <p className="text-muted-foreground mb-1">Reference RFC ID</p>
-                <p className="font-mono text-xs break-all bg-muted/30 p-2 rounded">{selectedPo.rfcId}</p>
-              </div>
-            )}
-            {selectedPo.notes && (
-              <div className="col-span-2">
-                <p className="text-muted-foreground mb-1">Notes</p>
-                <p className="bg-muted/30 p-3 rounded-md text-muted-foreground">{selectedPo.notes}</p>
-              </div>
-            )}
-            {selectedPo.approverName && (
-              <div className="col-span-2 bg-green-50/50 dark:bg-green-950/20 border border-green-100 dark:border-green-900 p-3 rounded-md">
-                <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Processed By</p>
-                <p className="font-medium flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-green-600" />
-                  {selectedPo.approverName} <span className="text-muted-foreground font-normal text-sm">({selectedPo.approverRole})</span>
-                </p>
-              </div>
-            )}
-          </div>
-          
-          <div>
-            <h4 className="font-semibold mb-3 border-b pb-2">Order Items</h4>
-            {selectedPo.items && selectedPo.items.length > 0 ? (
-              <Table className="whitespace-nowrap">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[250px]">Material</TableHead>
-                    <TableHead className="w-[100px] text-right">Quantity</TableHead>
-                    <TableHead className="w-[250px]">Notes</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {selectedPo.items.map((item: any) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.materialName || 'Unknown Material'}</TableCell>
-                      <TableCell className="text-right">{item.quantity}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{item.notes || '-'}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-sm text-muted-foreground italic bg-muted/20 p-4 rounded text-center">No items found for this PO.</p>
-            )}
-          </div>
-        </div>
-      ) : (
-        <p className="text-center text-muted-foreground py-8">Failed to load PO details.</p>
-      )}
-      
-      <DialogFooter className="sm:justify-between">
-        <div className="flex gap-2">
-          {selectedPo?.status === 'DRAFT' && (
-            <Button variant="default" onClick={() => updatePOStatus('WAITING_APPROVAL')} className="bg-amber-600 hover:bg-amber-700">
-              <Send className="w-4 h-4 mr-2" />
-              Submit for Approval
-            </Button>
-          )}
-          {selectedPo?.status === 'WAITING_APPROVAL' && ['FINANCE', 'ADMIN', 'SUPER_ADMIN'].includes(user?.role?.toUpperCase() || '') && (
-            <>
-              <Button variant="default" onClick={() => updatePOStatus('APPROVED')} className="bg-green-600 hover:bg-green-700">
-                <CheckCircle2 className="w-4 h-4 mr-2" />
-                Approve PO
-              </Button>
-              <Button variant="destructive" onClick={() => updatePOStatus('REJECTED')}>
-                <XCircle className="w-4 h-4 mr-2" />
-                Reject PO
-              </Button>
-            </>
-          )}
-        </div>
-        <Button variant="outline" onClick={() => setIsViewOpen(false)}>Close</Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
 
   {/* Delete Confirmation Dialog */}
   <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>

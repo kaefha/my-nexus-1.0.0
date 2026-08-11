@@ -160,3 +160,26 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }
+
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> | { id: string } }) {
+  try {
+    const params = await context.params;
+    const { id } = params;
+    const body = await request.json();
+    const { signedDocumentUrl } = body;
+
+    if (signedDocumentUrl !== undefined) {
+      const res = await pool.query(
+        `UPDATE purchase_orders SET signed_document_url = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+        [signedDocumentUrl, id]
+      );
+      if (res.rowCount === 0) return NextResponse.json({ message: 'PO not found' }, { status: 404 });
+      return NextResponse.json({ data: res.rows[0], message: 'PO updated successfully' }, { status: 200 });
+    }
+
+    return NextResponse.json({ message: 'No valid fields provided for update' }, { status: 400 });
+  } catch (error: any) {
+    console.error('Error in PATCH PO:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}

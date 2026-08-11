@@ -80,3 +80,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }
+
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, status } = body;
+    
+    if (!id || !status) {
+      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+    }
+
+    const res = await pool.query(
+      `UPDATE transfers SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
+      [status, id]
+    );
+
+    if (res.rowCount === 0) {
+      return NextResponse.json({ message: 'Transfer not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ data: res.rows[0], message: 'Status updated' }, { status: 200 });
+  } catch (error: any) {
+    console.error('Error updating transfer:', error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}

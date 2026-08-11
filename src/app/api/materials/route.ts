@@ -7,16 +7,43 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const search = (searchParams.get('search') || '').toLowerCase();
+    const group = searchParams.get('group') || '';
+    const uom = searchParams.get('uom') || '';
+    const sort = searchParams.get('sort') || '';
     
-    let queryStr = 'SELECT * FROM material_masters';
+    let queryStr = 'SELECT * FROM material_masters WHERE 1=1';
     const queryParams: any[] = [];
+    let paramIndex = 1;
 
     if (search) {
-      queryStr += ` WHERE LOWER(material_code) LIKE $1 OR LOWER(material_name) LIKE $1 OR LOWER(category) LIKE $1`;
+      queryStr += ` AND (LOWER(material_code) LIKE $${paramIndex} OR LOWER(material_name) LIKE $${paramIndex} OR LOWER(category) LIKE $${paramIndex})`;
       queryParams.push(`%${search}%`);
+      paramIndex++;
     }
 
-    queryStr += ' ORDER BY material_name ASC';
+    if (group && group !== 'ALL') {
+      queryStr += ` AND category = $${paramIndex}`;
+      queryParams.push(group);
+      paramIndex++;
+    }
+
+    if (uom && uom !== 'ALL') {
+      queryStr += ` AND unit = $${paramIndex}`;
+      queryParams.push(uom);
+      paramIndex++;
+    }
+
+    if (sort === 'group-asc') {
+      queryStr += ' ORDER BY category ASC, material_name ASC';
+    } else if (sort === 'group-desc') {
+      queryStr += ' ORDER BY category DESC, material_name ASC';
+    } else if (sort === 'uom-asc') {
+      queryStr += ' ORDER BY unit ASC, material_name ASC';
+    } else if (sort === 'uom-desc') {
+      queryStr += ' ORDER BY unit DESC, material_name ASC';
+    } else {
+      queryStr += ' ORDER BY material_name ASC';
+    }
     
     const res = await pool.query(queryStr, queryParams);
     

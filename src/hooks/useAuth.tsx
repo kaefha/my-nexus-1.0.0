@@ -46,19 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('nims_token', data.accessToken);
       localStorage.setItem('nims_user', JSON.stringify(data.user));
     } catch (error) {
-      console.warn("Backend unavailable, using simulated login for UI preview.");
-      // Fallback: Simulated Login for UI Demo
-      const dummyToken = "dummy_jwt_token_for_ui_preview";
-      const dummyUser = {
-        id: "demo-id",
-        email: email,
-        name: email.split('@')[0].toUpperCase(),
-        role: "SUPER_ADMIN"
-      };
-      setToken(dummyToken);
-      setUser(dummyUser);
-      localStorage.setItem('nims_token', dummyToken);
-      localStorage.setItem('nims_user', JSON.stringify(dummyUser));
+      throw error;
     }
   };
 

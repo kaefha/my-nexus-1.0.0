@@ -11,11 +11,20 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ExcelImportExport } from '@/components/ExcelImportExport';
+import { toast } from 'sonner';
+import { DataTablePagination } from '@/components/shared/DataTablePagination';
 
 export default function WarehousePage() {
  const [warehouses, setWarehouses] = useState<any[]>([]);
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
+ const [filterType, setFilterType] = useState('ALL');
+ const [filterStatus, setFilterStatus] = useState('ALL');
+ const [sortBy, setSortBy] = useState('name-asc');
+ 
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
  
  // Modal state
  const [isOpen, setIsOpen] = useState(false);
@@ -45,7 +54,7 @@ export default function WarehousePage() {
  const fetchWarehouses = async () => {
  setLoading(true);
  try {
- const { data } = await api.get('/api/warehouse', { params: { search } });
+ const { data } = await api.get('/api/warehouse', { params: { search, type: filterType, status: filterStatus, sort: sortBy } });
  setWarehouses(data.data || []);
  } catch (e) { 
  console.error(e); 
@@ -56,7 +65,8 @@ export default function WarehousePage() {
 
  useEffect(() => {
  fetchWarehouses();
- }, [search]);
+ setPage(1); // Reset page on filter change
+ }, [search, filterType, filterStatus, sortBy]);
 
  const openCreateDialog = () => {
  setEditId(null);
@@ -96,11 +106,11 @@ export default function WarehousePage() {
       if (response.ok && data.url) {
         setFormData({ ...formData, evidence: data.url });
       } else {
-        alert(data.message || 'Failed to upload image');
+        toast.error(data.message || 'Failed to upload image');
       }
     } catch (error) {
       console.error('Upload error:', error);
-      alert('An error occurred while uploading.');
+      toast.error('An error occurred while uploading.');
     } finally {
       setIsUploading(false);
     }
@@ -115,11 +125,12 @@ export default function WarehousePage() {
  } else {
  await api.post('/api/warehouse', { ...formData, capacity: parseInt(formData.capacity) || 0 });
  }
- setIsOpen(false);
- fetchWarehouses();
+  setIsOpen(false);
+  fetchWarehouses();
+  toast.success(`Warehouse ${editId ? 'updated' : 'created'} successfully`);
  } catch (error) {
- console.error('Error saving warehouse:', error);
- alert('Failed to save Warehouse');
+  console.error('Error saving warehouse:', error);
+  toast.error('Failed to save Warehouse');
  } finally {
  setIsSubmitting(false);
  }
@@ -130,37 +141,128 @@ export default function WarehousePage() {
  setIsSubmitting(true);
  try {
  await api.delete(`/api/warehouse?id=${deleteId}`);
- setDeleteOpen(false);
- fetchWarehouses();
+  setDeleteOpen(false);
+  fetchWarehouses();
+  toast.success('Warehouse deleted successfully');
  } catch (error) {
- console.error('Failed to delete warehouse', error);
- alert('Failed to delete warehouse');
+  console.error('Failed to delete warehouse', error);
+  toast.error('Failed to delete warehouse');
  } finally {
  setIsSubmitting(false);
  }
  };
 
+  const handleImport = async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await api.post('/api/warehouse/excel', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      toast.success(`Imported successfully. Processed ${res.data.count} items.`);
+      fetchWarehouses();
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to import Excel');
+    }
+  };
+
+  const handleExport = async () => {
+    window.location.href = '/api/warehouse/excel?action=export';
+  };
+
+  const handleDownloadTemplate = () => {
+    window.location.href = '/api/warehouse/excel?action=template';
+  };
+
  return (
  <div className="space-y-6">
- <div className="animate-fade-in">
+  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-fade-in">
+    <div>
         <h1 className="text-2xl font-bold">Warehouse Management</h1>
- <p className="text-sm text-muted-foreground mt-0.5">Manage storage locations and capacity</p>
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between animate-fade-in" style={{ animationDelay: '100ms' }}>
-        <div className="relative w-full max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
- <Input 
- type="search" 
- placeholder="Search warehouse code or name..." 
- value={search} 
- onChange={(e) => setSearch(e.target.value)}
- className="pl-9"
- />
+        <p className="text-sm text-muted-foreground mt-0.5">Manage storage locations and capacity</p>
+    </div>
+    <div className="flex items-center gap-3 bg-card border rounded-xl px-4 py-3 shadow-sm shrink-0">
+        <div className="bg-primary/10 p-2.5 rounded-lg">
+            <Warehouse className="w-5 h-5 text-primary" />
         </div>
-        <Button onClick={openCreateDialog} className="gap-2 ">
- <Plus className="w-4 h-4" /> New Warehouse
- </Button>
+        <div>
+            <p className="text-xs text-muted-foreground font-medium mb-0.5">Total Warehouses</p>
+            <p className="text-2xl font-bold leading-none">{warehouses.length}</p>
+        </div>
+    </div>
+  </div>
+
+      <div className="flex flex-col gap-4 animate-fade-in" style={{ animationDelay: '100ms' }}>
+        <div className="flex justify-between items-center">
+          <ExcelImportExport 
+            onImport={handleImport} 
+            onExport={handleExport} 
+            onDownloadTemplate={handleDownloadTemplate} 
+            isLoading={loading} 
+          />
+          <Button onClick={openCreateDialog} className="gap-2 shrink-0">
+            <Plus className="w-4 h-4" /> New Warehouse
+          </Button>
+        </div>
+        
+        <div className="flex flex-wrap gap-4 items-end bg-card p-4 rounded-xl border border-border">
+          <div className="flex-1 min-w-[200px]">
+            <Label className="text-xs mb-1.5 block text-muted-foreground">Search</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input 
+                type="search" 
+                placeholder="Search warehouse code or name..." 
+                value={search} 
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 bg-background"
+              />
+            </div>
+          </div>
+          <div className="w-[150px]">
+            <Label className="text-xs mb-1.5 block text-muted-foreground">Filter by Type</Label>
+            <Select value={filterType} onValueChange={(val) => setFilterType(val || "")}>
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Types</SelectItem>
+                <SelectItem value="MAIN">Main Hub</SelectItem>
+                <SelectItem value="SITE">Site Storage</SelectItem>
+                <SelectItem value="TRANSIT">Transit Point</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-[150px]">
+            <Label className="text-xs mb-1.5 block text-muted-foreground">Filter by Status</Label>
+            <Select value={filterStatus} onValueChange={(val) => setFilterStatus(val || "")}>
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Statuses</SelectItem>
+                <SelectItem value="ACTIVE">Active</SelectItem>
+                <SelectItem value="INACTIVE">Inactive</SelectItem>
+                <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-[180px]">
+            <Label className="text-xs mb-1.5 block text-muted-foreground">Sort By</Label>
+            <Select value={sortBy} onValueChange={(val) => setSortBy(val || "")}>
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Sort By" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name-asc">Name (A-Z)</SelectItem>
+                <SelectItem value="name-desc">Name (Z-A)</SelectItem>
+                <SelectItem value="code-asc">Code (A-Z)</SelectItem>
+                <SelectItem value="code-desc">Code (Z-A)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
  <div className="animate-fade-in" style={{ animationDelay: '200ms' }}>
@@ -170,6 +272,7 @@ export default function WarehousePage() {
  <p className="text-muted-foreground">Loading warehouses...</p>
  </div>
  ) : warehouses.length > 0 ? (
+ <>
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
@@ -184,7 +287,7 @@ export default function WarehousePage() {
  </TableRow>
  </TableHeader>
  <TableBody>
- {warehouses.map((w) => (
+ {warehouses.slice((page - 1) * pageSize, page * pageSize).map((w) => (
  <TableRow key={w.id} className="hover:bg-muted/30">
  <TableCell className="font-medium text-primary">{w.code}</TableCell>
  <TableCell className="font-medium">{w.name}</TableCell>
@@ -236,6 +339,14 @@ export default function WarehousePage() {
  ))}
  </TableBody>
  </Table>
+ <DataTablePagination 
+    totalItems={warehouses.length} 
+    pageSize={pageSize} 
+    currentPage={page} 
+    onPageChange={setPage} 
+    onPageSizeChange={setPageSize} 
+ />
+ </>
  ) : (
  <div className="text-center py-16 bg-card border rounded-xl ">
  <Warehouse className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
@@ -333,7 +444,7 @@ export default function WarehousePage() {
  <div className="grid grid-cols-2 gap-4">
  <div className="grid gap-2">
  <Label htmlFor="type">Type</Label>
- <Select value={formData.type} onValueChange={(val) => setFormData({...formData, type: val})}>
+ <Select value={formData.type} onValueChange={(val) => setFormData({ ...formData, type: val || "" })}>
  <SelectTrigger>
  <SelectValue placeholder="Select Type" />
  </SelectTrigger>
@@ -358,7 +469,7 @@ export default function WarehousePage() {
  {editId && (
  <div className="grid gap-2">
  <Label htmlFor="status">Status</Label>
- <Select value={formData.status} onValueChange={(val) => setFormData({...formData, status: val})}>
+ <Select value={formData.status} onValueChange={(val) => setFormData({ ...formData, status: val || "" })}>
  <SelectTrigger>
  <SelectValue placeholder="Status" />
  </SelectTrigger>
@@ -413,7 +524,7 @@ export default function WarehousePage() {
        </div>
        <div className="flex items-center gap-2">
          {previewImage && (
-           <Button variant="outline" size="sm" asChild>
+           <Button variant="outline" size="sm" >
              <a href={previewImage} target="_blank" rel="noreferrer" className="flex items-center gap-2">
                <ExternalLink className="w-4 h-4" /> Open in new tab
              </a>

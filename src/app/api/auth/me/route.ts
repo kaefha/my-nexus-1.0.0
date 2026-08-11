@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { query } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
@@ -9,19 +9,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: jwtUser.sub },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        phone: true,
-        avatar: true,
-        isActive: true,
-        createdAt: true,
-      },
-    });
+    const { rows } = await query(
+      'SELECT id, email, name, role, phone, avatar, "isActive", "createdAt" FROM "users" WHERE id = $1',
+      [jwtUser.sub]
+    );
+    const user = rows[0];
 
     if (!user) {
       return NextResponse.json({ message: 'User not found' }, { status: 404 });

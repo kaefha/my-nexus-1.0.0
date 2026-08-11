@@ -8,15 +8,37 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = (searchParams.get('search') || '').toLowerCase();
     
+    const status = searchParams.get('status');
+    const sort = searchParams.get('sort') || 'name-asc';
+    
     let queryStr = 'SELECT * FROM vendors';
     const queryParams: any[] = [];
+    const conditions: string[] = [];
 
     if (search) {
-      queryStr += ` WHERE LOWER(vendor_code) LIKE $1 OR LOWER(name) LIKE $1 OR LOWER(contact_person) LIKE $1`;
+      conditions.push(`(LOWER(vendor_code) LIKE $${queryParams.length + 1} OR LOWER(name) LIKE $${queryParams.length + 1} OR LOWER(contact_person) LIKE $${queryParams.length + 1})`);
       queryParams.push(`%${search}%`);
     }
+    
+    if (status && status !== 'ALL') {
+      const isActive = status === 'ACTIVE';
+      conditions.push(`is_active = $${queryParams.length + 1}`);
+      queryParams.push(isActive);
+    }
 
-    queryStr += ' ORDER BY name ASC';
+    if (conditions.length > 0) {
+      queryStr += ` WHERE ${conditions.join(' AND ')}`;
+    }
+
+    if (sort === 'name-desc') {
+      queryStr += ' ORDER BY name DESC';
+    } else if (sort === 'code-asc') {
+      queryStr += ' ORDER BY vendor_code ASC';
+    } else if (sort === 'code-desc') {
+      queryStr += ' ORDER BY vendor_code DESC';
+    } else {
+      queryStr += ' ORDER BY name ASC';
+    }
     
     const res = await pool.query(queryStr, queryParams);
     

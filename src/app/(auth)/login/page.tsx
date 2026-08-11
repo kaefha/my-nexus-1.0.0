@@ -26,7 +26,7 @@ function LoginForm() {
       await login(email, password);
       router.push('/');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+      setError(err.response?.data?.message || 'Email atau password salah');
     } finally {
       setIsLoading(false);
     }

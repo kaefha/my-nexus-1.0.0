@@ -12,14 +12,21 @@ import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DataTablePagination } from '@/components/shared/DataTablePagination';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function TransferPage() {
+ const { user } = useAuth();
  const [transfers, setTransfers] = useState<any[]>([]);
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
  
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
+
  // Modal state
  const [isOpen, setIsOpen] = useState(false);
+ const [viewData, setViewData] = useState<any>(null);
  const [isSubmitting, setIsSubmitting] = useState(false);
  const [warehouses, setWarehouses] = useState<any[]>([]);
  const [isManualTo, setIsManualTo] = useState(false);
@@ -35,7 +42,7 @@ export default function TransferPage() {
  const fetchTransfers = async () => {
  setLoading(true);
  try {
- const { data } = await api.get('/api/transfer', { params: { search } });
+ const { data } = await api.get('/api/transfer', { params: { search, limit: 5000 } });
  setTransfers(data.data || []);
  } catch (e) { 
  console.error(e); 
@@ -56,6 +63,7 @@ export default function TransferPage() {
  useEffect(() => {
  fetchTransfers();
  fetchWarehouses();
+ setPage(1);
  }, [search]);
 
  const handleSubmit = async (e: React.FormEvent) => {
@@ -73,6 +81,22 @@ export default function TransferPage() {
  } finally {
  setIsSubmitting(false);
  }
+ };
+
+ const canApprove = user?.role === 'PROCUREMENT' || user?.role === 'LOGISTICS' || user?.role === 'ADMIN';
+
+ const updateStatus = async (status: string) => {
+  setIsSubmitting(true);
+  try {
+    await api.put('/api/transfer', { id: viewData.id, status });
+    setViewData(null);
+    fetchTransfers();
+  } catch (error) {
+    console.error('Error updating status:', error);
+    alert('Failed to update status');
+  } finally {
+    setIsSubmitting(false);
+  }
  };
 
  return (
@@ -105,6 +129,7 @@ export default function TransferPage() {
  <p className="text-muted-foreground">Loading transfers...</p>
  </div>
  ) : transfers.length > 0 ? (
+ <>
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
@@ -118,7 +143,7 @@ export default function TransferPage() {
  </TableRow>
  </TableHeader>
  <TableBody>
- {transfers.map((t) => (
+ {transfers.slice((page - 1) * pageSize, page * pageSize).map((t) => (
  <TableRow key={t.id} className="hover:bg-muted/30">
  <TableCell className="font-medium text-primary">{t.transferNumber}</TableCell>
  <TableCell>{t.fromLocation}</TableCell>
@@ -129,7 +154,7 @@ export default function TransferPage() {
  <TableCell>{t.pic || '-'}</TableCell>
  <TableCell><StatusBadge status={t.status} /></TableCell>
  <TableCell className="text-right">
- <Button variant="ghost" size="sm" className="text-xs" onClick={() => alert('View Transfer coming soon!')}>
+ <Button variant="ghost" size="sm" className="text-xs text-primary bg-primary/10 hover:bg-primary/20 hover:text-primary" onClick={() => setViewData(t)}>
  View
  </Button>
  </TableCell>
@@ -137,6 +162,14 @@ export default function TransferPage() {
  ))}
  </TableBody>
  </Table>
+ <DataTablePagination 
+    totalItems={transfers.length} 
+    pageSize={pageSize} 
+    currentPage={page} 
+    onPageChange={setPage} 
+    onPageSizeChange={setPageSize} 
+  />
+ </>
  ) : (
  <div className="text-center py-16 bg-card border rounded-xl ">
  <ArrowLeftRight className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
@@ -169,7 +202,7 @@ export default function TransferPage() {
  <div className="grid grid-cols-2 gap-4">
  <div className="grid gap-2">
  <Label htmlFor="fromLocation">From Location *</Label>
- <Select value={formData.fromLocation} onValueChange={(val) => setFormData({...formData, fromLocation: val})} required>
+ <Select value={formData.fromLocation} onValueChange={(val) => setFormData({ ...formData, fromLocation: val || "" })} required>
  <SelectTrigger>
  <SelectValue placeholder="Select Warehouse" />
  </SelectTrigger>
@@ -190,7 +223,7 @@ export default function TransferPage() {
  setIsManualTo(true);
  setFormData({...formData, toLocation: ''});
  } else {
- setFormData({...formData, toLocation: val});
+ setFormData({...formData, toLocation: val || ''});
  }
  }} 
  required
@@ -261,6 +294,64 @@ export default function TransferPage() {
  </Button>
  </DialogFooter>
  </form>
+ </DialogContent>
+ </Dialog>
+
+ <Dialog open={!!viewData} onOpenChange={(open) => !open && setViewData(null)}>
+ <DialogContent className="sm:max-w-[500px]">
+ <DialogHeader>
+ <DialogTitle>Transfer Details</DialogTitle>
+ <DialogDescription>Details for material transfer <span className="font-semibold text-primary">{viewData?.transferNumber}</span></DialogDescription>
+ </DialogHeader>
+ {viewData && (
+ <div className="space-y-4 py-2">
+ <div className="grid grid-cols-3 gap-2 text-sm border-b pb-3">
+ <span className="font-medium text-muted-foreground">Transfer Number</span>
+ <span className="col-span-2 font-semibold text-primary">{viewData.transferNumber}</span>
+ </div>
+ <div className="grid grid-cols-3 gap-2 text-sm border-b pb-3">
+ <span className="font-medium text-muted-foreground">Status</span>
+ <span className="col-span-2"><StatusBadge status={viewData.status} /></span>
+ </div>
+ <div className="grid grid-cols-3 gap-2 text-sm border-b pb-3">
+ <span className="font-medium text-muted-foreground">From Location</span>
+ <span className="col-span-2">{viewData.fromLocation}</span>
+ </div>
+ <div className="grid grid-cols-3 gap-2 text-sm border-b pb-3">
+ <span className="font-medium text-muted-foreground">To Location</span>
+ <span className="col-span-2">{viewData.toLocation}</span>
+ </div>
+ <div className="grid grid-cols-3 gap-2 text-sm border-b pb-3">
+ <span className="font-medium text-muted-foreground">Transfer Date</span>
+ <span className="col-span-2">{viewData.transferDate ? formatDate(viewData.transferDate) : '-'}</span>
+ </div>
+ <div className="grid grid-cols-3 gap-2 text-sm border-b pb-3">
+ <span className="font-medium text-muted-foreground">PIC</span>
+ <span className="col-span-2">{viewData.pic || '-'}</span>
+ </div>
+ <div className="grid grid-cols-3 gap-2 text-sm pb-1">
+ <span className="font-medium text-muted-foreground">Reason / Notes</span>
+ <span className="col-span-2 whitespace-pre-wrap">{viewData.reason || '-'}</span>
+ </div>
+ </div>
+ )}
+ <DialogFooter className="flex w-full justify-between sm:justify-between items-center">
+ <div className="flex-1">
+   {canApprove && viewData?.status === 'PENDING' && (
+     <div className="flex gap-2">
+       <Button type="button" variant="destructive" onClick={() => updateStatus('REJECTED')} disabled={isSubmitting}>
+         Reject
+       </Button>
+       <Button type="button" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => updateStatus('APPROVED')} disabled={isSubmitting}>
+         Approve
+       </Button>
+     </div>
+   )}
+ </div>
+ <Button type="button" variant="outline" onClick={() => setViewData(null)} disabled={isSubmitting}>
+ Close
+ </Button>
+ </DialogFooter>
  </DialogContent>
  </Dialog>
  </div>

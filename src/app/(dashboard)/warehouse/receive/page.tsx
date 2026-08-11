@@ -168,7 +168,7 @@ export default function MaterialReceivePage() {
                       <Loader2 className="w-4 h-4 animate-spin" /> Loading DOs...
                     </div>
                   ) : (
-                    <Select value={selectedDoId} onValueChange={handleDoChange}>
+                    <Select value={selectedDoId} onValueChange={(val) => handleDoChange(val || "")}>
                       <SelectTrigger id="do-select" className="w-full">
                         <SelectValue placeholder="Select a delivered DO..." />
                       </SelectTrigger>
@@ -191,7 +191,7 @@ export default function MaterialReceivePage() {
                   <Label htmlFor="warehouse-select">Receiving Warehouse</Label>
                   <Select 
                     value={selectedWarehouseId} 
-                    onValueChange={setSelectedWarehouseId}
+                    onValueChange={(val) => setSelectedWarehouseId(val || "")}
                     disabled={!selectedDoId || isFetchingDo || isSubmitting}
                   >
                     <SelectTrigger id="warehouse-select" className="w-full">

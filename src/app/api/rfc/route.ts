@@ -16,11 +16,13 @@ export async function GET(request: Request) {
     let queryStr = `
       SELECT r.*, 
              p.project_name, p.customer,
-             u.name as requestor_name,
+             u.name as requestor_name, u.role as requestor_role,
+             a.name as approver_name, a.role as approver_role,
              (SELECT COUNT(*) FROM rfc_items i WHERE i.rfc_id = r.id) as items_count
       FROM rfcs r
       LEFT JOIN projects p ON r.project_id = p.id
       LEFT JOIN users u ON r.requestor_id = u.id
+      LEFT JOIN users a ON r.approver_id = a.id
       WHERE 1=1
     `;
     const queryParams: any[] = [];
@@ -61,6 +63,7 @@ export async function GET(request: Request) {
       requestorId: row.requestor_id,
       location: row.location,
       status: row.status,
+      approvalDestination: row.approval_destination,
       notes: row.notes,
       requestDocument: row.request_document,
       signedDocument: row.signed_document,
@@ -71,7 +74,12 @@ export async function GET(request: Request) {
         customer: row.customer
       },
       requestor: {
-        name: row.requestor_name
+        name: row.requestor_name,
+        role: row.requestor_role
+      },
+      approver: {
+        name: row.approver_name,
+        role: row.approver_role
       },
       _count: {
         items: parseInt(row.items_count || '0', 10)
@@ -97,8 +105,8 @@ export async function POST(request: Request) {
 
     await client.query('BEGIN');
 
-    // RFCs always start with Site Manager approval according to SOP
-    const status = 'WAITING_SITE_APPROVAL';
+    // RFCs start with WAITING_APPROVAL
+    const status = 'WAITING_APPROVAL';
 
     const id = generateId();
     // Use format RFC-YYYYMMDD-XXXX

@@ -42,9 +42,13 @@ function MapUpdater({ center }: { center: [number, number] }) {
 }
 
 export default function MapComponent({ selectedDO }: { selectedDO: any }) {
-  // Use Jakarta coordinates as origin for the simulation
-  const origin: [number, number] = [-6.200000, 106.816666];
-  const dest: [number, number] = [-6.250000, 106.850000];
+  // Use actual origin coordinates if available, fallback to Jakarta
+  const origin: [number, number] = (selectedDO?.originLat && selectedDO?.originLng) 
+    ? [selectedDO.originLat, selectedDO.originLng] 
+    : [-6.200000, 106.816666];
+  const dest: [number, number] = (selectedDO?.destinationLat && selectedDO?.destinationLng)
+    ? [selectedDO.destinationLat, selectedDO.destinationLng]
+    : [-6.250000, 106.850000];
   
   const [currentPos, setCurrentPos] = useState<[number, number] | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -70,7 +74,7 @@ export default function MapComponent({ selectedDO }: { selectedDO: any }) {
     return () => clearInterval(interval);
   }, [selectedDO?.id]);
 
-  const routePath = [origin, dest];
+  const routePath = currentPos ? [origin, currentPos, dest] : [origin, dest];
 
   return (
     <div className="relative w-full h-[600px] overflow-hidden rounded-xl font-sans bg-slate-100">
@@ -88,6 +92,14 @@ export default function MapComponent({ selectedDO }: { selectedDO: any }) {
         {/* Draw the route line */}
         {currentPos && <Polyline positions={routePath} color="#1e293b" weight={4} opacity={0.8} dashArray="10, 10" />}
         
+        {/* Origin Marker */}
+        <Marker position={origin} icon={destIcon}>
+          <Popup>
+            <div className="font-semibold text-slate-900">Origin</div>
+            <div className="text-slate-600">{selectedDO?.origin || 'Unknown Origin'}</div>
+          </Popup>
+        </Marker>
+
         {/* Destination Marker */}
         <Marker position={dest} icon={destIcon}>
           <Popup>

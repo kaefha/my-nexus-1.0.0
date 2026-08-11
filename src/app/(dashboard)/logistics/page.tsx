@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Truck, Search, Eye, Plus, Loader2, Package, Map, MapPin, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Truck, Search, Eye, Plus, Loader2, Package, MapPin, MoreHorizontal, Pencil, Trash2, ChevronsUpDown, Check } from 'lucide-react';
 import api from '@/lib/api';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { formatDate } from '@/lib/utils';
@@ -12,19 +12,32 @@ import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
+import { cn } from '@/lib/utils';
 import RealTrackingMap from '@/components/map/RealTrackingMap';
+import { useRouter } from 'next/navigation';
+import { DataTablePagination } from '@/components/shared/DataTablePagination';
 
 export default function LogisticsPage() {
- const [selectedDO, setSelectedDO] = useState<any>(null);
+ const { user } = useAuth();
+ const router = useRouter();
  const [dos, setDos] = useState<any[]>([]);
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
  
- // Modal state
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
+ 
+  // Modal state
   const [isOpen, setIsOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pos, setPos] = useState<any[]>([]);
+  const [poPopoverOpen, setPoPopoverOpen] = useState(false);
+ const [poSearch, setPoSearch] = useState('');
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     doNumber: '',
@@ -32,13 +45,14 @@ export default function LogisticsPage() {
     destination: '',
     poId: '',
     shippingDate: '',
-    notes: ''
+    notes: '',
+    originCoords: '' // e.g. -6.228637, 106.857384
   });
 
   const fetchDOs = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/api/logistics', { params: { search, type: 'active' } });
+      const { data } = await api.get('/api/logistics', { params: { search, type: 'active', limit: 5000 } });
       setDos(data.data || []);
     } catch (e) { 
       console.error(e); 
@@ -70,17 +84,41 @@ export default function LogisticsPage() {
     fetchDOs();
     fetchPOs();
     fetchWarehouses();
+    setPage(1);
   }, [search]);
 
  const handleSubmit = async (e: React.FormEvent) => {
  e.preventDefault();
  setIsSubmitting(true);
     try {
-      await api.post('/api/logistics', formData);
+      // Parse originCoords if available
+      let originLat = null;
+      let originLng = null;
+      if (formData.originCoords) {
+        const parts = formData.originCoords.split(',');
+        if (parts.length === 2) {
+          originLat = parseFloat(parts[0].trim());
+          originLng = parseFloat(parts[1].trim());
+        }
+      }
+      
+      const payload = {
+        ...formData,
+        originLat,
+        originLng
+      };
+
+      if (editId) {
+        await api.put(`/api/logistics/${editId}`, payload);
+        toast.success('Delivery Order updated successfully');
+      } else {
+        await api.post('/api/logistics', payload);
+        toast.success('Delivery Order created successfully');
+      }
       setIsOpen(false);
-      setFormData({ doNumber: '', origin: '', destination: '', poId: '', shippingDate: '', notes: '' });
+      setEditId(null);
+      setFormData({ doNumber: '', origin: '', destination: '', poId: '', shippingDate: '', notes: '', originCoords: '' });
       fetchDOs();
-      toast.success('Delivery Order created successfully');
  } catch (error: any) {
  console.error('Error creating DO:', error);
  toast.error(error.response?.data?.message || 'Failed to create Delivery Order');
@@ -100,6 +138,8 @@ export default function LogisticsPage() {
    }
  };
 
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'PROCUREMENT' || user?.role === 'SUPER_ADMIN';
+
  return (
  <div className="space-y-6">
  <div className="animate-fade-in">
@@ -118,11 +158,17 @@ export default function LogisticsPage() {
  className="pl-9"
  />
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setIsOpen(true)} className="gap-2">
-            <Plus className="w-4 h-4" /> New DO
-          </Button>
-        </div>
+        {canEdit && (
+          <div className="flex gap-2">
+            <Button onClick={() => {
+              setEditId(null);
+              setFormData({ doNumber: '', origin: '', destination: '', poId: '', shippingDate: '', notes: '', originCoords: '' });
+              setIsOpen(true);
+            }} className="gap-2">
+              <Plus className="w-4 h-4" /> New DO
+            </Button>
+          </div>
+        )}
       </div>
 
  <div className="animate-fade-in" style={{ animationDelay: '200ms' }}>
@@ -132,6 +178,7 @@ export default function LogisticsPage() {
  <p className="text-muted-foreground">Loading delivery orders...</p>
  </div>
  ) : dos.length > 0 ? (
+ <>
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
@@ -146,7 +193,7 @@ export default function LogisticsPage() {
  </TableRow>
  </TableHeader>
  <TableBody>
- {dos.map((d) => (
+ {dos.slice((page - 1) * pageSize, page * pageSize).map((d) => (
  <TableRow key={d.id} className="hover:bg-muted/30">
   <TableCell className="font-medium text-primary">{d.doNumber}</TableCell>
   <TableCell>{d.origin}</TableCell>
@@ -176,8 +223,36 @@ export default function LogisticsPage() {
       size="sm" 
       className="text-xs h-8" 
       onClick={() => {
-        navigator.clipboard.writeText(`${window.location.origin}/track/${d.id}`);
-        toast.success('Tracking link copied to clipboard! Send this to the driver.');
+        const url = `${window.location.origin}/track/${d.id}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(() => {
+            toast.success('Tracking link copied to clipboard! Send this to the driver.');
+          }).catch(() => {
+            prompt('Please copy this tracking link manually:', url);
+          });
+        } else {
+          // Fallback for non-secure contexts (HTTP non-localhost)
+          try {
+            const textArea = document.createElement("textarea");
+            textArea.value = url;
+            // Avoid scrolling to bottom
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.position = "fixed";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            if (successful) {
+              toast.success('Tracking link copied to clipboard! Send this to the driver.');
+            } else {
+              prompt('Please copy this tracking link manually:', url);
+            }
+          } catch (err) {
+            prompt('Please copy this tracking link manually:', url);
+          }
+        }
       }}
     >
       <MapPin className="w-3 h-3 mr-1" /> Copy Link
@@ -187,18 +262,34 @@ export default function LogisticsPage() {
         <MoreHorizontal className="h-4 w-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-40">
-        <DropdownMenuItem onClick={() => setSelectedDO(d)} className="cursor-pointer">
+        <DropdownMenuItem onClick={() => router.push(`/logistics/${d.id}`)} className="cursor-pointer">
           <Eye className="w-4 h-4 mr-2 text-muted-foreground" />
           View Details
         </DropdownMenuItem>
-        <DropdownMenuItem className="cursor-pointer">
-          <Pencil className="w-4 h-4 mr-2 text-muted-foreground" />
-          Edit DO
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleDelete(d.id)} className="cursor-pointer text-destructive focus:text-destructive">
-          <Trash2 className="w-4 h-4 mr-2" />
-          Delete DO
-        </DropdownMenuItem>
+        {canEdit && (
+          <>
+            <DropdownMenuItem onClick={() => {
+              setEditId(d.id);
+              setFormData({
+                doNumber: d.doNumber || '',
+                origin: d.origin || '',
+                destination: d.destination || '',
+                poId: d.po?.id || d.poId || '',
+                shippingDate: d.shippingDate ? d.shippingDate.split('T')[0] : '',
+                notes: d.notes || '',
+                originCoords: (d.originLat && d.originLng) ? `${d.originLat}, ${d.originLng}` : ''
+              });
+              setIsOpen(true);
+            }} className="cursor-pointer">
+              <Pencil className="w-4 h-4 mr-2 text-muted-foreground" />
+              Edit DO
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleDelete(d.id)} className="cursor-pointer text-destructive focus:text-destructive">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete DO
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   </div>
@@ -207,13 +298,23 @@ export default function LogisticsPage() {
  ))}
  </TableBody>
  </Table>
+ <DataTablePagination 
+    totalItems={dos.length} 
+    pageSize={pageSize} 
+    currentPage={page} 
+    onPageChange={setPage} 
+    onPageSizeChange={setPageSize} 
+  />
+  </>
  ) : (
  <div className="text-center py-16 bg-card border rounded-xl ">
  <Truck className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
  <p className="text-muted-foreground">No active delivery orders found</p>
- <Button variant="link" onClick={() => setIsOpen(true)} className="mt-2">
- Create your first DO
- </Button>
+ {canEdit && (
+   <Button variant="link" onClick={() => setIsOpen(true)} className="mt-2">
+   Create your first DO
+   </Button>
+ )}
  </div>
  )}
  </div>
@@ -222,8 +323,8 @@ export default function LogisticsPage() {
  <DialogContent>
  <form onSubmit={handleSubmit}>
  <DialogHeader>
- <DialogTitle>New Delivery Order</DialogTitle>
- <DialogDescription>Create a new delivery order to track shipment.</DialogDescription>
+ <DialogTitle>{editId ? 'Edit Delivery Order' : 'New Delivery Order'}</DialogTitle>
+ <DialogDescription>{editId ? 'Update delivery order details.' : 'Create a new delivery order to track shipment.'}</DialogDescription>
  </DialogHeader>
  <div className="grid gap-4 py-4">
  <div className="grid gap-2">
@@ -246,40 +347,83 @@ export default function LogisticsPage() {
  required 
  />
  </div>
-              <div className="grid gap-2">
-                <Label htmlFor="destination">Destination (Warehouse) *</Label>
-                <select 
-                  id="destination" 
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={formData.destination}
-                  onChange={(e) => setFormData({...formData, destination: e.target.value})}
-                  required 
-                >
-                  <option value="">Select destination warehouse...</option>
-                  {warehouses.map(w => (
-                    <option key={w.id} value={w.id}>
-                      {w.name} ({w.code})
-                    </option>
-                  ))}
-                </select>
+  <div className="grid gap-2">
+    <Label htmlFor="originCoords">Origin Coordinates (Optional)</Label>
+    <Input 
+      id="originCoords" 
+      placeholder="e.g. -6.228637, 106.857384" 
+      value={formData.originCoords}
+      onChange={(e) => setFormData({...formData, originCoords: e.target.value})}
+    />
+    <p className="text-xs text-muted-foreground">Latitude and longitude separated by comma.</p>
+  </div>
+  <div className="grid gap-2">
+    <Label htmlFor="destination">Destination (Warehouse) *</Label>
+    <select 
+      id="destination" 
+      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+      value={formData.destination}
+      onChange={(e) => setFormData({...formData, destination: e.target.value})}
+      required 
+    >
+      <option value="">Select destination warehouse...</option>
+      {warehouses.map(w => (
+        <option key={w.id} value={w.id}>
+          {w.name} ({w.code})
+        </option>
+      ))}
+    </select>
+  </div>
+  <div className="grid gap-2">
+    <Label htmlFor="poId">Approved PO *</Label>
+    <Popover open={poPopoverOpen} onOpenChange={setPoPopoverOpen}>
+      <PopoverTrigger 
+        className="flex min-h-10 h-auto w-full max-w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-accent hover:text-accent-foreground"
+        aria-expanded={poPopoverOpen}
+      >
+        <span className="text-left flex-1 pr-2 break-words whitespace-normal">
+          {formData.poId
+            ? pos.find((po) => po.id === formData.poId)?.poNumber
+            : "Select approved PO..."}
+        </span>
+        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+      </PopoverTrigger>
+      <PopoverContent className="w-[400px] p-0" align="start">
+        <div className="flex items-center border-b px-3">
+          <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+          <Input
+            placeholder="Search PO number or vendor..."
+            className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0"
+            value={poSearch}
+            onChange={(e) => setPoSearch(e.target.value)}
+          />
+        </div>
+        <div className="max-h-[300px] overflow-y-auto p-1">
+          {pos.filter(po => `${po.poNumber} ${po.vendor}`.toLowerCase().includes(poSearch.toLowerCase())).length === 0 ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">No PO found.</div>
+          ) : (
+            pos.filter(po => `${po.poNumber} ${po.vendor}`.toLowerCase().includes(poSearch.toLowerCase())).map(po => (
+              <div
+                key={po.id}
+                className={`relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground ${formData.poId === po.id ? 'bg-accent text-accent-foreground' : ''}`}
+                onClick={() => {
+                  setFormData({ ...formData, poId: po.id });
+                  setPoPopoverOpen(false);
+                }}
+              >
+                {formData.poId === po.id && (
+                  <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                    <Check className="h-4 w-4" />
+                  </span>
+                )}
+                {po.poNumber} - {po.vendor}
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="poId">Approved PO *</Label>
-                <select 
-                  id="poId" 
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={formData.poId}
-                  onChange={(e) => setFormData({...formData, poId: e.target.value})}
-                  required 
-                >
-                  <option value="">Select approved PO...</option>
-                  {pos.map(po => (
-                    <option key={po.id} value={po.id}>
-                      {po.poNumber} - {po.vendor}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  </div>
  <div className="grid gap-2">
  <Label htmlFor="shippingDate">Shipping Date</Label>
  <DatePicker 
@@ -308,46 +452,6 @@ export default function LogisticsPage() {
  </DialogFooter>
  </form>
  </DialogContent>
- </Dialog>
-
- <Dialog open={!!selectedDO} onOpenChange={(open) => !open && setSelectedDO(null)}>
-  <DialogContent className="sm:max-w-[1000px] p-0 overflow-hidden bg-slate-50 border-0 shadow-2xl">
-    <div className="relative w-full h-[600px]">
-      <RealTrackingMap selectedDO={selectedDO} />
-      
-      {/* Close button in top right corner */}
-      <Button 
-        variant="secondary" 
-        size="sm" 
-        className="absolute top-4 right-4 z-50 rounded-full shadow-lg bg-white hover:bg-slate-100 text-slate-900 border border-slate-200"
-        onClick={() => setSelectedDO(null)}
-      >
-        Close Map
-      </Button>
-
-      {/* Admin actions (Mark as delivered / Evidence upload) could be added here in the future */}
-      {selectedDO && (selectedDO.status === 'SHIPPING' || selectedDO.status === 'WAITING') && (
-        <div className="absolute bottom-4 right-4 z-50 bg-white p-4 rounded-xl shadow-lg border border-slate-200">
-          <p className="text-sm font-medium mb-2">Admin Actions</p>
-          <Button size="sm" className="w-full" onClick={() => {
-            // Minimal UI for admin to upload evidence
-            const evidenceUrl = prompt("Enter Evidence Photo URL (or Base64):");
-            if (evidenceUrl) {
-              api.patch(`/api/logistics/${selectedDO.id}`, { status: 'DELIVERED', evidence: evidenceUrl })
-                .then(() => {
-                  toast.success('Evidence recorded, status updated to DELIVERED');
-                  setSelectedDO(null);
-                  fetchDOs();
-                })
-                .catch(() => toast.error('Failed to update status'));
-            }
-          }}>
-            Upload Evidence (Receive)
-          </Button>
-        </div>
-      )}
-    </div>
-  </DialogContent>
  </Dialog>
  </div>
  );

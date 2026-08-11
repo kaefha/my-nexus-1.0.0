@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/collapsible';
 import { ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/hooks/useAuth';
 
 const groupedNavigation = [
   {
@@ -211,7 +212,44 @@ function NavCollapsible({ item, pathname, counts }: { item: any, pathname: strin
 
 export default function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const { user } = useAuth();
   const [counts, setCounts] = React.useState({ rfcApprovals: 0, poApprovals: 0, materialReceives: 0 });
+
+  const filteredNavigation = groupedNavigation.map(group => {
+    let filteredItems = group.items;
+    
+    // Role-based filtering
+    const userRole = user?.role?.toUpperCase() || '';
+    
+    filteredItems = filteredItems.filter(item => {
+      // Admin has access to everything
+      if (userRole === 'ADMIN' || userRole === 'SUPER_ADMIN') return true;
+
+      switch (item.label) {
+        case 'Project Management':
+          return ['SITE_MANAGER', 'PROJECT_MANAGER'].includes(userRole);
+        case 'RFC Management':
+          return ['SITE_MANAGER', 'PROJECT_MANAGER', 'PROCUREMENT', 'OWNER'].includes(userRole);
+        case 'Procurement':
+          return ['PROCUREMENT', 'OWNER'].includes(userRole);
+        case 'Logistics':
+          return true; // All roles can view Logistics
+        case 'Warehouse':
+        case 'Inventory':
+        case 'Material Transfer':
+          return ['PROCUREMENT', 'OWNER', 'SITE_MANAGER', 'PROJECT_MANAGER'].includes(userRole);
+        case 'Master Data':
+          return ['PROCUREMENT'].includes(userRole);
+        default:
+          return true; // Dashboard, Reports etc
+      }
+    });
+
+    return {
+      ...group,
+      items: filteredItems
+    };
+  }).filter(group => group.items.length > 0);
 
   React.useEffect(() => {
     const fetchCounts = async () => {
@@ -244,7 +282,7 @@ export default function AppSidebar({ ...props }: React.ComponentProps<typeof Sid
       </SidebarHeader>
 
       <SidebarContent className="px-2 py-4">
-        {groupedNavigation.map((group) => (
+        {filteredNavigation.map((group) => (
           <SidebarGroup key={group.group} className="mb-2 last:mb-0">
             {group.group !== 'Main' && (
               <SidebarGroupLabel className="px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
@@ -284,12 +322,14 @@ export default function AppSidebar({ ...props }: React.ComponentProps<typeof Sid
         <SidebarMenu>
           <SidebarMenuItem>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-muted border flex items-center justify-center">
-                <span className="text-xs font-semibold">AD</span>
+              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary border flex items-center justify-center">
+                <span className="text-xs font-semibold">
+                  {user?.name?.substring(0, 2).toUpperCase() || 'U'}
+                </span>
               </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-medium">Admin User</span>
-                <span className="text-xs text-muted-foreground">admin@nexus.com</span>
+              <div className="flex flex-col overflow-hidden">
+                <span className="text-sm font-medium truncate">{user?.name || 'User'}</span>
+                <span className="text-xs text-muted-foreground truncate">{user?.email || ''}</span>
               </div>
             </div>
           </SidebarMenuItem>

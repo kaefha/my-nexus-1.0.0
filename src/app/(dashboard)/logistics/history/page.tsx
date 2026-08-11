@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DataTablePagination } from '@/components/shared/DataTablePagination';
 
 export default function LogisticsHistoryPage() {
  const [selectedDO, setSelectedDO] = useState<any>(null);
@@ -16,11 +17,14 @@ export default function LogisticsHistoryPage() {
  const [loading, setLoading] = useState(true);
  const [search, setSearch] = useState('');
  const [warehouses, setWarehouses] = useState<any[]>([]);
+  
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const fetchDOs = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/api/logistics', { params: { search, type: 'history' } });
+      const { data } = await api.get('/api/logistics', { params: { search, type: 'history', limit: 5000 } });
       setDos(data.data || []);
     } catch (e) { 
       console.error(e); 
@@ -41,6 +45,7 @@ export default function LogisticsHistoryPage() {
   useEffect(() => {
     fetchDOs();
     fetchWarehouses();
+    setPage(1);
   }, [search]);
 
  return (
@@ -70,6 +75,7 @@ export default function LogisticsHistoryPage() {
  <p className="text-muted-foreground">Loading shipment history...</p>
  </div>
  ) : dos.length > 0 ? (
+ <>
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
@@ -84,7 +90,7 @@ export default function LogisticsHistoryPage() {
  </TableRow>
  </TableHeader>
  <TableBody>
- {dos.map((d) => (
+ {dos.slice((page - 1) * pageSize, page * pageSize).map((d) => (
  <TableRow key={d.id} className="hover:bg-muted/30">
   <TableCell className="font-medium text-primary">{d.doNumber}</TableCell>
   <TableCell>{d.origin}</TableCell>
@@ -117,6 +123,14 @@ export default function LogisticsHistoryPage() {
  ))}
  </TableBody>
  </Table>
+ <DataTablePagination 
+    totalItems={dos.length} 
+    pageSize={pageSize} 
+    currentPage={page} 
+    onPageChange={setPage} 
+    onPageSizeChange={setPageSize} 
+  />
+  </>
  ) : (
  <div className="text-center py-16 bg-card border rounded-xl ">
  <CheckCircle2 className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />

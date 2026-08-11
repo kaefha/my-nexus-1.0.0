@@ -147,7 +147,7 @@ export default function MaterialIssuePage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="rfcSelect">Approved RFC</Label>
-                <Select value={selectedRfcId} onValueChange={handleRfcChange} disabled={loadingRFCs}>
+                <Select value={selectedRfcId} onValueChange={(val) => handleRfcChange(val || "")} disabled={loadingRFCs}>
                   <SelectTrigger id="rfcSelect">
                     <SelectValue placeholder={loadingRFCs ? 'Loading...' : 'Select RFC'} />
                   </SelectTrigger>
@@ -187,7 +187,7 @@ export default function MaterialIssuePage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="warehouseSelect">Source Warehouse *</Label>
-                      <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId} required>
+                      <Select value={selectedWarehouseId} onValueChange={(val) => setSelectedWarehouseId(val || "")} required>
                         <SelectTrigger id="warehouseSelect">
                           <SelectValue placeholder="Select warehouse to issue from" />
                         </SelectTrigger>

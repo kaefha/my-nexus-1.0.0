@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { query } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
@@ -7,11 +7,10 @@ export async function GET(req: NextRequest) {
     const user = getUserFromRequest(req);
     if (!user) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
 
-    const notifications = await prisma.notification.findMany({
-      where: { userId: user.sub, isRead: false },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    });
+    const { rows: notifications } = await query(
+      'SELECT * FROM "notifications" WHERE "userId" = $1 AND "isRead" = false ORDER BY "createdAt" DESC LIMIT 20',
+      [user.sub]
+    );
     return NextResponse.json(notifications);
   } catch (error) {
     return NextResponse.json({ message: 'Internal server error' }, { status: 500 });

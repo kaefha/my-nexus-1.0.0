@@ -16,6 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { DataTablePagination } from '@/components/shared/DataTablePagination';
 import Link from 'next/link';
 
 export default function RfcPage() {
@@ -26,14 +27,19 @@ export default function RfcPage() {
  const [startDate, setStartDate] = useState('');
  const [endDate, setEndDate] = useState('');
  const [sort, setSort] = useState('desc');
+ const [page, setPage] = useState(1);
+ const [pageSize, setPageSize] = useState(10);
 
  const [editModalOpen, setEditModalOpen] = useState(false);
  const [selectedRfc, setSelectedRfc] = useState<any>(null);
  const [editFormData, setEditFormData] = useState({ location: '', notes: '' });
  const [isSubmitting, setIsSubmitting] = useState(false);
+ const [deleteId, setDeleteId] = useState<string | null>(null);
+ const [isDeleting, setIsDeleting] = useState(false);
 
  useEffect(() => {
    fetchRfcs();
+   setPage(1);
  }, [search, status, startDate, endDate, sort]);
 
  const fetchRfcs = async () => {
@@ -78,16 +84,20 @@ export default function RfcPage() {
    }
  };
 
- const handleDelete = async (id: string) => {
-   if (!confirm('Are you sure you want to delete this RFC? This cannot be undone.')) return;
-   try {
-     await api.delete(`/api/rfc/${id}`);
-     toast.success('RFC deleted successfully');
-     fetchRfcs();
-   } catch (error: any) {
-     toast.error(error.response?.data?.message || 'Failed to delete RFC');
-   }
- };
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    setIsDeleting(true);
+    try {
+      await api.delete(`/api/rfc/${deleteId}`);
+      toast.success('RFC deleted successfully');
+      setDeleteId(null);
+      fetchRfcs();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to delete RFC');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
  return (
  <div className="space-y-6">
@@ -110,7 +120,7 @@ export default function RfcPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-            <Select value={status} onValueChange={setStatus}>
+            <Select value={status} onValueChange={(val) => setStatus(val || "")}>
               <SelectTrigger className="w-[230px] h-9 bg-background">
                 <SelectValue>
                   {status === 'ALL' ? 'All Status' : 
@@ -145,7 +155,7 @@ export default function RfcPage() {
               />
             </div>
 
-            <Select value={sort} onValueChange={setSort}>
+            <Select value={sort} onValueChange={(val) => setSort(val || "")}>
               <SelectTrigger className="w-[160px] h-9 bg-background">
                 <SelectValue>
                   Sort by: {sort === 'desc' ? 'Newest' : 'Oldest'}
@@ -173,6 +183,7 @@ export default function RfcPage() {
  <p className="text-muted-foreground">Loading RFC data...</p>
  </div>
  ) : rfcs.length > 0 ? (
+ <>
  <Table className="whitespace-nowrap">
  <TableHeader>
  <TableRow>
@@ -186,7 +197,7 @@ export default function RfcPage() {
  </TableRow>
  </TableHeader>
  <TableBody>
- {rfcs.map((rfc) => (
+ {rfcs.slice((page - 1) * pageSize, page * pageSize).map((rfc) => (
  <TableRow key={rfc.id} className="hover:bg-muted/30">
  <TableCell className="font-medium text-primary">
  {rfc.rfcNumber}
@@ -235,7 +246,7 @@ export default function RfcPage() {
         <DropdownMenuItem className="cursor-pointer" onClick={() => openEditModal(rfc)}>
           <Pencil className="w-4 h-4 mr-2 text-muted-foreground" /> Edit RFC
         </DropdownMenuItem>
-        <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onClick={() => handleDelete(rfc.id)}>
+        <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onClick={() => setDeleteId(rfc.id)}>
           <Trash2 className="w-4 h-4 mr-2" /> Delete RFC
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -245,6 +256,14 @@ export default function RfcPage() {
  ))}
  </TableBody>
  </Table>
+ <DataTablePagination 
+    totalItems={rfcs.length} 
+    pageSize={pageSize} 
+    currentPage={page} 
+    onPageChange={setPage} 
+    onPageSizeChange={setPageSize} 
+ />
+ </>
  ) : (
  <div className="text-center py-16 bg-card border rounded-xl ">
  <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
@@ -296,6 +315,24 @@ export default function RfcPage() {
         </Button>
       </DialogFooter>
     </form>
+  </DialogContent>
+ </Dialog>
+
+ <Dialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+  <DialogContent className="sm:max-w-[425px]">
+  <DialogHeader>
+  <DialogTitle>Delete RFC?</DialogTitle>
+  <DialogDescription>
+  Are you sure you want to delete this RFC? This cannot be undone.
+  </DialogDescription>
+  </DialogHeader>
+  <DialogFooter className="pt-4">
+  <Button variant="outline" className="w-full sm:w-auto" onClick={() => setDeleteId(null)} disabled={isDeleting}>Cancel</Button>
+  <Button variant="destructive" className="w-full sm:w-auto" onClick={confirmDelete} disabled={isDeleting}>
+  {isDeleting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+  Delete
+  </Button>
+  </DialogFooter>
   </DialogContent>
  </Dialog>
 

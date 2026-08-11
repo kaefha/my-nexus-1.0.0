@@ -8,15 +8,42 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = (searchParams.get('search') || '').toLowerCase();
     
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+    const sort = searchParams.get('sort') || 'newest';
+    
     let queryStr = 'SELECT * FROM projects';
     const queryParams: any[] = [];
+    const conditions: string[] = [];
 
     if (search) {
-      queryStr += ` WHERE LOWER(project_name) LIKE $1 OR LOWER(customer) LIKE $1 OR LOWER(region) LIKE $1`;
+      conditions.push(`(LOWER(project_name) LIKE $${queryParams.length + 1} OR LOWER(customer) LIKE $${queryParams.length + 1} OR LOWER(region) LIKE $${queryParams.length + 1})`);
       queryParams.push(`%${search}%`);
     }
 
-    queryStr += ' ORDER BY created_at DESC';
+    if (startDate) {
+      conditions.push(`start_date >= $${queryParams.length + 1}`);
+      queryParams.push(startDate);
+    }
+    
+    if (endDate) {
+      conditions.push(`start_date <= $${queryParams.length + 1}`);
+      queryParams.push(endDate);
+    }
+
+    if (conditions.length > 0) {
+      queryStr += ` WHERE ${conditions.join(' AND ')}`;
+    }
+
+    if (sort === 'name-asc') {
+      queryStr += ' ORDER BY project_name ASC';
+    } else if (sort === 'name-desc') {
+      queryStr += ' ORDER BY project_name DESC';
+    } else if (sort === 'oldest') {
+      queryStr += ' ORDER BY created_at ASC';
+    } else {
+      queryStr += ' ORDER BY created_at DESC';
+    }
     
     const res = await pool.query(queryStr, queryParams);
     

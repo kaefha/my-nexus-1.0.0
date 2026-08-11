@@ -8,10 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import api from '@/lib/api';
 import { useParams } from 'next/navigation';
+import { compressImage } from '@/lib/utils';
 
 export default function DriverTrackingPage() {
   const params = useParams();
-  const doId = params.id as string;
+  const doId = params?.id as string;
 
   const [isTracking, setIsTracking] = useState(false);
   const [status, setStatus] = useState<'idle' | 'tracking' | 'error' | 'success' | 'completed'>('idle');
@@ -74,14 +75,20 @@ export default function DriverTrackingPage() {
     setWatchId(null);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setEvidenceBase64(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImage(file);
+        setEvidenceBase64(compressed);
+      } catch (err) {
+        console.error('Compression failed', err);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setEvidenceBase64(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
