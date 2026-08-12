@@ -24,25 +24,25 @@ export async function PATCH(
 
     // Build update query dynamically
     let queryStr = 'UPDATE purchase_orders SET status = $1, updated_at = NOW()';
-    const params: any[] = [status];
+    const sqlParams: any[] = [status];
     let paramIndex = 2;
 
     if (approverId) {
       queryStr += `, approver_id = $${paramIndex}`;
-      params.push(approverId);
+      sqlParams.push(approverId);
       paramIndex++;
     }
 
     if (signedDocumentUrl) {
       queryStr += `, signed_document_url = $${paramIndex}`;
-      params.push(signedDocumentUrl);
+      sqlParams.push(signedDocumentUrl);
       paramIndex++;
     }
 
     queryStr += ` WHERE id = $${paramIndex}`;
-    params.push(id);
+    sqlParams.push(id);
 
-    await pool.query(queryStr, params);
+    await pool.query(queryStr, sqlParams);
 
     return NextResponse.json({ message: 'Status updated successfully' }, { status: 200 });
   } catch (error: any) {
