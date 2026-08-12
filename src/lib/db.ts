@@ -6,8 +6,8 @@ const globalForPg = global as unknown as { pool: Pool };
 export const pool =
   globalForPg.pool ||
   new Pool({
-    connectionString: process.env.DATABASE_URL,
-    // Add additional config like ssl: true if needed for production
+    connectionString: process.env.DATABASE_URL?.replace(/"/g, ''), // Strip quotes just in case
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
   });
 
 if (process.env.NODE_ENV !== 'production') globalForPg.pool = pool;
